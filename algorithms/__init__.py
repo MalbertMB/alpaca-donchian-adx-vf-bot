@@ -1,0 +1,2 @@
+from strategy_base import Strategy
+from strategy_impl import VolatilityBreakoutStrategy
