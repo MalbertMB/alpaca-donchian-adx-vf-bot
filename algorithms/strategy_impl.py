@@ -1,15 +1,19 @@
 """
-Implements your specific strategy:
+Project Name: Alpaca Donchian ADX VF BOT
+File Name: strategy_impl.py
+Description: 
+    This module implements the Volatility Breakout Strategy using Donchian Channels, ADX, and ATR.
+    It includes methods to generate entry and exit signals based on market conditions.
 
-Donchian breakout
-
-ADX trend filter
-
-Volatility filters
+Author: Albert Marín
+Date Created: 2025-06-25
+Last Modified: 2025-06-25
+Version: 1.0.0
 """
 
+
 import pandas as pd
-from strategy_base import Strategy
+from algorithms.strategy_interface import Strategy
 from utils import calculate_donchian, calculate_adx, calculate_atr
 
 class VolatilityBreakoutStrategy(Strategy):

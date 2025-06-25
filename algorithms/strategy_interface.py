@@ -1,3 +1,17 @@
+"""
+Project Name: Alpaca Donchian ADX VF BOT
+File Name: strategy_interface.py
+Description: 
+    This module defines an abstract base class for trading strategies.
+    It includes methods for generating entry and exit signals based on market data.
+
+Author: Albert Marín
+Date Created: 2025-06-25
+Last Modified: 2025-06-25
+Version: 1.0.0
+"""
+
+
 from abc import ABC, abstractmethod
 import pandas as pd
 
