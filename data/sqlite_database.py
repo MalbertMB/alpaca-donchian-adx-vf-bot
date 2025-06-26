@@ -45,19 +45,6 @@ class SQLiteDatabase(DatabaseInterface):
             )
         """)
 
-        # Trades Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
-                id TEXT PRIMARY KEY,
-                symbol TEXT,
-                qty INTEGER,
-                side TEXT,
-                type TEXT,
-                time TEXT,
-                status TEXT
-            )
-        """)
-
         self.conn.commit()
 
     def insert_ohlcv_data(self, symbol: str, data: List[Dict]):
@@ -88,29 +75,5 @@ class SQLiteDatabase(DatabaseInterface):
             start_date.strftime('%Y-%m-%d'),
             end_date.strftime('%Y-%m-%d')
         ))
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
-
-    def insert_trade(self, trade: Dict):
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO trades (id, symbol, qty, side, type, time, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            trade["id"],
-            trade["symbol"],
-            trade["qty"],
-            trade["side"],
-            trade["type"],
-            trade["time"],
-            trade["status"]
-        ))
-        self.conn.commit()
-
-    def get_open_trades(self) -> List[Dict]:
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM trades WHERE status = 'open'
-        """)
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

@@ -38,12 +38,3 @@ class DatabaseInterface(ABC):
         """Retrieve OHLCV data for a symbol within a date range."""
         pass
 
-    @abstractmethod
-    def insert_trade(self, trade: Dict):
-        """Store a trade from Alpaca."""
-        pass
-
-    @abstractmethod
-    def get_open_trades(self) -> List[Dict]:
-        """Retrieve all currently open trades."""
-        pass

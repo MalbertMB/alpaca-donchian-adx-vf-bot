@@ -33,6 +33,7 @@ class DataManager:
         self.data_client = StockHistoricalDataClient(self.api_key, self.secret_key)
         self.trading_client = TradingClient(self.api_key, self.secret_key, paper=True)
 
+
     def update_ohlcv_data(self, symbol: str, start: datetime, end: datetime):
         print(f"Fetching data from Alpaca for {symbol} from {start.date()} to {end.date()}")
 
@@ -64,14 +65,16 @@ class DataManager:
             })
         self.db.insert_ohlcv_data(symbol, data)
 
+
     def get_ohlcv_data(self, symbol: str, start: datetime, end: datetime) -> List[dict]:
         return self.db.get_ohlcv_data(symbol, start, end)
 
-    def fetch_and_store_open_trades(self):
-        open_orders = self.trading_client.get_orders(status='open')
 
+    def get_open_trades(self) -> List[dict]:
+        open_orders = self.trading_client.get_orders(status='open')
+        trades = []
         for order in open_orders:
-            trade = {
+            trades.append({
                 "id": str(order.id),
                 "symbol": order.symbol,
                 "qty": int(order.qty),
@@ -79,8 +82,6 @@ class DataManager:
                 "type": order.order_class.value if order.order_class else "market",
                 "time": order.submitted_at.isoformat(),
                 "status": order.status.value
-            }
-            self.db.insert_trade(trade)
+            })
+        return trades
 
-    def get_open_trades(self) -> List[dict]:
-        return self.db.get_open_trades()
