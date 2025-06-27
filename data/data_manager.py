@@ -15,20 +15,23 @@ Version: 1.0.0
 import os
 from datetime import datetime
 from typing import List
-from config.config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER_URL
-from alpaca.data.historical import StockHistoricalDataClient
+from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER_URL
 from alpaca.data.requests import StockBarsRequest
+from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
+from alpaca.trading.requests import GetOrdersRequest
+from alpaca.trading.enums import OrderSide, QueryOrderStatus
 from .sqlite_database import SQLiteDatabase
+
 
 class DataManager:
     def __init__(self, db: SQLiteDatabase):
         self.db = db
         self.db.connect()
 
-        self.api_key = os.getenv(ALPACA_API_KEY)
-        self.secret_key = os.getenv(ALPACA_SECRET_KEY)
+        self.api_key = ALPACA_API_KEY
+        self.secret_key = ALPACA_SECRET_KEY
 
         self.data_client = StockHistoricalDataClient(self.api_key, self.secret_key)
         self.trading_client = TradingClient(self.api_key, self.secret_key, paper=True)
@@ -50,7 +53,7 @@ class DataManager:
             print(f"No data returned for {symbol}.")
             return
 
-        bars = bars[bars['symbol'] == symbol]  # in case of multi-symbol returns
+        # If requesting a single symbol, no need to filter again
         bars.reset_index(inplace=True)
 
         data = []
@@ -63,25 +66,50 @@ class DataManager:
                 "close": row["close"],
                 "volume": row["volume"]
             })
+
         self.db.insert_ohlcv_data(symbol, data)
+
 
 
     def get_ohlcv_data(self, symbol: str, start: datetime, end: datetime) -> List[dict]:
         return self.db.get_ohlcv_data(symbol, start, end)
 
 
-    def get_open_trades(self) -> List[dict]:
-        open_orders = self.trading_client.get_orders(status='open')
-        trades = []
-        for order in open_orders:
-            trades.append({
-                "id": str(order.id),
-                "symbol": order.symbol,
-                "qty": int(order.qty),
-                "side": order.side.value,
-                "type": order.order_class.value if order.order_class else "market",
-                "time": order.submitted_at.isoformat(),
-                "status": order.status.value
+    def get_open_positions(self) -> List[dict]:
+        positions = self.trading_client.get_all_positions()
+        active_trades = []
+        
+        for position in positions:
+            print(f"Symbol: {position.symbol}, Quantity: {position.qty}, Side: {position.side}, Average Entry Price: {position.lastday_avg_entry_price}")
+            print(position)
+            active_trades.append({
+                "symbol": position.symbol,
+                "qty": float(position.qty),
+                "side": position.side,  # 'long' or 'short'
+                "entry_date": position.lastday_avg_entry_price,
             })
-        return trades
+            
+        return active_trades
+    
+    def get_orders(self) -> List[dict]:
+
+        request_params = GetOrdersRequest(
+            status=QueryOrderStatus.OPEN,  # Get only open orders
+        )
+        
+        orders = self.trading_client.get_orders(request_params)
+        active_orders = []
+        
+        for order in orders:
+            print(f"Order ID: {order.id}, Symbol: {order.symbol}, Status: {order.status}, Quantity: {order.qty}, Side: {order.side}")
+            active_orders.append({
+                "id": order.id,
+                "symbol": order.symbol,
+                "qty": float(order.qty),
+                "side": order.side,
+                "status": order.status,
+            })
+            
+        return active_orders
+
 
