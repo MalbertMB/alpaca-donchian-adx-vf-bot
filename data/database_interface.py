@@ -38,3 +38,12 @@ class DatabaseInterface(ABC):
         """Retrieve OHLCV data for a symbol within a date range."""
         pass
 
+    @abstractmethod
+    def has_ohlcv_data(self, symbol: str, start_date: datetime, end_date: datetime) -> bool:
+        """Check if OHLCV data exists for a symbol within a date range."""
+        pass
+
+    @abstractmethod
+    def populate_stock_calendar(self, calendar: List[datetime]):
+        """Populates the calendar table with a list of Calendar objects from Alpaca."""
+        pass

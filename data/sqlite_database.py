@@ -45,6 +45,14 @@ class SQLiteDatabase(DatabaseInterface):
             )
         """)
 
+        # Calendar Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS calendar (
+                date TEXT PRIMARY KEY
+            )
+        """)
+        
+
         self.conn.commit()
 
     def insert_ohlcv_data(self, symbol: str, data: List[Dict]):
@@ -77,3 +85,50 @@ class SQLiteDatabase(DatabaseInterface):
         ))
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
+    
+    def has_ohlcv_data(self, symbol: str, start_date: datetime, end_date: datetime) -> bool:
+        cursor = self.conn.cursor()
+
+        # Step 1: Get all expected trading days from local market calendar
+        cursor.execute("""
+            SELECT date FROM calendar
+            WHERE date BETWEEN ? AND ?
+        """, (
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
+        ))
+        trading_days = [row[0] for row in cursor.fetchall()]
+
+        if not trading_days:
+            raise ValueError("No trading days found in start {start_date} and end {end_date} range.")
+
+        # Step 2: Count how many of those days exist in ohlcv table
+        cursor.execute("""
+            SELECT COUNT(*) FROM ohlcv
+            WHERE symbol = ? AND date BETWEEN ? AND ?
+        """, (
+            symbol,
+            start_date.strftime('%Y-%m-%d'),
+            end_date.strftime('%Y-%m-%d')
+        ))
+        data_count = cursor.fetchone()[0]
+
+        return data_count == len(trading_days)
+
+    
+    def populate_stock_calendar(self, calendar_data: List):
+        """
+        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Populates the calendar table with dates available on the Alpaca API.
+        -- Calendar data is already populated form 1970 to 2029 --
+        Parameters:
+            calendar_data (List): List of Alpaca Calendar objects.
+        """
+        cursor = self.conn.cursor()
+        cursor.executemany("""
+            INSERT OR IGNORE INTO calendar (date)
+            VALUES (?)
+        """, [(item.date.strftime('%Y-%m-%d'),) for item in calendar_data])
+        self.conn.commit()
+
+        

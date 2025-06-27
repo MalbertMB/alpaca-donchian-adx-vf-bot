@@ -5,3 +5,5 @@ python-dotenv
 aiohttp
 ta
 python-dotenv
+typing
+sqlite3
