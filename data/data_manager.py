@@ -175,14 +175,15 @@ class DataManager:
         """
 
         request_params = GetOrdersRequest(
-            status=QueryOrderStatus.OPEN,  # Get only open orders
+            status=QueryOrderStatus.OPEN,
         )
         
         orders = self.trading_client.get_orders(request_params)
         active_orders = []
-        
+
+        print(f"Retrieving open orders from Alpaca:")
         for order in orders:
-            print(f"Order ID: {order.id}, Symbol: {order.symbol}, Status: {order.status}, Quantity: {order.qty}, Side: {order.side}")
+            print(f" - Order ID: {order.id}, Symbol: {order.symbol}, Status: {order.status}, Quantity: {order.qty}, Side: {order.side}")
             active_orders.append({
                 "id": order.id,
                 "symbol": order.symbol,
@@ -204,6 +205,33 @@ class DataManager:
         -- Calendar data is already populated form 1970 to 2029 --
         """
         print(f"Populating calendar")
-        
         calendar = self.trading_client.get_calendar()
         self.db.populate_stock_calendar(calendar)
+
+    def cancel_order_by_id(self, order_id: str):
+        """
+        Cancels an open order by its ID.
+        Parameters:
+            order_id (str): The ID of the order to cancel.
+        """
+        print(f"Cancelling order with ID {order_id}")
+        try:
+            self.trading_client.cancel_order_by_id(order_id)
+            print(f"Order {order_id} cancelled successfully.")
+        except Exception as e:
+            print(f"Error cancelling order {order_id}: {e}")
+            raise e
+
+    def close_trade_by_symbol(self, symbol: str):
+        """
+        Closes an open trade by its symbol.
+        Parameters:
+            symbol (str): The stock symbol of the trade to close.
+        """
+        print(f"Closing trade for {symbol}")
+        try:
+            self.trading_client.close_position(symbol)
+            print(f"Trade for {symbol} closed successfully.")
+        except Exception as e:
+            print(f"Error closing trade for {symbol}: {e}")
+            raise e
