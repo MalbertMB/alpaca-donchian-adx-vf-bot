@@ -8,8 +8,7 @@ Description:
 
 Author: Albert Marín
 Date Created: 2025-06-25
-Last Modified: 2025-06-25
-Version: 1.0.0
+Last Modified: 2025-06-28
 """
 
 import os
@@ -80,10 +79,10 @@ class DataManager:
 
         self.db.insert_ohlcv_data(symbol, data)
 
-
     def get_ohlcv_data(self, symbol: str, start: datetime, end: datetime) -> List[dict]:
         """
         Retrieves OHLCV data for a given symbol from the database.
+        If the data is not available in the database, it fetches it from Alpaca and stores it.
         Parameters:
             symbol (str): The stock symbol to retrieve data for.
             start (datetime): The start date for the data.
@@ -98,23 +97,22 @@ class DataManager:
             self.update_ohlcv_data(symbol, start, end)
 
         print(f"Retrieving OHLCV data for {symbol} from {start.date()} to {end.date()}")
-        return self.db.get_ohlcv_data(symbol, start, end)
-    
+        return self.db.get_ohlcv_data(symbol, start, end)    
 
 
     #
-    # Trade Management
+    # API Live Positions Management
     #
 
-    def open_trade_qty(self, _symbol: str, _qty: float, _side: OrderSide):
+    def open_position_qty(self, _symbol: str, _qty: float, _side: OrderSide):
         """
-        Opens a trade for a given symbol with a specified quantity and side (buy/sell).
+        Opens a position for a given symbol with a specified quantity and side (buy/sell).
         Parameters:
             _symbol (str): The stock symbol to trade.
             _qty (float): The quantity of shares to trade.
             _side (OrderSide): The side of the trade (buy or sell).
         """
-        print(f"Opening trade for {_symbol} with quantity {_qty} on side {_side}")
+        print(f"Opening position for {_symbol} with quantity {_qty} on side {_side}")
 
         market_order_data = MarketOrderRequest(
             symbol=_symbol,
@@ -127,15 +125,14 @@ class DataManager:
         print(f"Market order submitted: {market_order.id} for {market_order.symbol} with quantity {market_order.qty} on side {market_order.side}")
 
 
-    def open_trade_notional(self, _symbol: str, _notional: float):
+    def open_position_notional(self, _symbol: str, _notional: float):
         """
-        Opens a trade for a given symbol with a specified notional value.
+        Opens a buy position for a given symbol with a specified notional value.
         Parameters:
             _symbol (str): The stock symbol to trade.
             _notional (float): The notional value of the trade.
         """
-
-        print(f"Opening trade for {_symbol} with notional {_notional} on side buy")
+        print(f"Opening position for {_symbol} with notional {_notional} on side buy")
 
         market_order_data = MarketOrderRequest(
             symbol=_symbol,
@@ -148,24 +145,30 @@ class DataManager:
         print(f"Market order submitted: {market_order.id} for {market_order.symbol} with notional {market_order.notional} on side {market_order.side}")
 
 
-    def get_open_positions(self) -> List[dict]:
+    def get_positions(self) -> List[dict]:
         """
         Retrieves all open positions from Alpaca.
         Returns:
             List[dict]: A list of dictionaries containing open positions.
         """
+        print("Retrieving open positions from Alpaca")
         positions = self.trading_client.get_all_positions()
-        active_trades = []
+        active_positions = []
         
+        if not positions:
+            print("No active positions found.")
+            return active_positions
+
+        print(f"Found {len(positions)} active positions:")
         for position in positions:
-            print(f"Symbol: {position.symbol}, Quantity: {position.qty}, Side: {position.side}")
-            active_trades.append({
+            print(f" - Symbol: {position.symbol}, Quantity: {position.qty}, Side: {position.side}")
+            active_positions.append({
                 "symbol": position.symbol,
                 "qty": float(position.qty),
                 "side": position.side
             })
             
-        return active_trades
+        return active_positions
     
     def get_orders(self) -> List[dict]:
         """
@@ -173,13 +176,18 @@ class DataManager:
         Returns:
             List[dict]: A list of dictionaries containing open orders.
         """
-
+        print("Retrieving open orders from Alpaca")
+        
         request_params = GetOrdersRequest(
             status=QueryOrderStatus.OPEN,
         )
         
         orders = self.trading_client.get_orders(request_params)
         active_orders = []
+
+        if not orders:
+            print("No active orders found.")
+            return active_orders
 
         print(f"Retrieving open orders from Alpaca:")
         for order in orders:
@@ -193,20 +201,6 @@ class DataManager:
             })
             
         return active_orders
-
-
-    #
-    # Calendar Management
-    #
-    def populate_stock_calendar(self):
-        """
-        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Populates the calendar table with dates available on the Alpaca API.
-        -- Calendar data is already populated form 1970 to 2029 --
-        """
-        print(f"Populating calendar")
-        calendar = self.trading_client.get_calendar()
-        self.db.populate_stock_calendar(calendar)
 
     def cancel_order_by_id(self, order_id: str):
         """
@@ -222,16 +216,92 @@ class DataManager:
             print(f"Error cancelling order {order_id}: {e}")
             raise e
 
-    def close_trade_by_symbol(self, symbol: str):
+    def close_position_by_symbol(self, symbol: str):
         """
-        Closes an open trade by its symbol.
+        Closes an open position by its symbol.
         Parameters:
             symbol (str): The stock symbol of the trade to close.
         """
-        print(f"Closing trade for {symbol}")
+        print(f"Closing position for {symbol}")
         try:
             self.trading_client.close_position(symbol)
-            print(f"Trade for {symbol} closed successfully.")
+            print(f"position for {symbol} closed successfully.")
         except Exception as e:
-            print(f"Error closing trade for {symbol}: {e}")
+            print(f"Error closing position for {symbol}: {e}")
             raise e
+
+
+    #
+    # Backtesting Trade Management
+    #
+
+    def insert_open_trade_backtest(self, position: dict):
+        """
+        Inserts an open trade record into the database for backtesting purposes.
+        Parameters:
+            position (Dict): A dictionary containing the details of the open trade.
+                Expected keys: 'id', 'symbol', 'entry_date', 'entry_price', 'quantity'.
+        """
+        print(f"Inserting open trade for backtest: {position}")
+        self.db.insert_open_trade_backtest(position)
+
+    def insert_close_trade_backtest(self, trade: dict):
+        """
+        Inserts a closed trade record into the database for backtesting purposes.
+        Parameters:
+            trade (Dict): A dictionary containing the details of the closed trade.
+                Expected keys: 'id', 'symbol', 'entry_date', 'entry_price', 'exit_date', 'exit_price', 'quantity', 'profit_loss'.
+        """
+        print(f"Inserting closed trade for backtest: {trade}")
+        self.db.insert_close_trade_backtest(trade)
+    
+    def get_open_trades_backtest(self) -> List[dict]:
+        """
+        Retrieves all open trades from the database for backtesting purposes.
+        Returns:
+            List[dict]: A list of dictionaries containing open trade records.
+        """
+        print("Retrieving open trades for backtest")
+        return self.db.get_open_trades_backtest()
+    
+    def get_closed_trades_backtest(self) -> List[dict]:
+        """
+        Retrieves all closed trades from the database for backtesting purposes.
+        Returns:
+            List[dict]: A list of dictionaries containing closed trade records.
+        """
+        print("Retrieving closed trades for backtest")
+        return self.db.get_closed_trades_backtest()
+    
+
+    #
+    # Other Methods, THIS SHOULD NOT BE USED UNLESS YOU KNOW WHAT YOU ARE DOING
+    #
+
+    def populate_stock_calendar(self):
+        """
+        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Populates the calendar table with dates available on the Alpaca API.
+        -- Calendar data is already populated form 1970 to 2029 --
+        """
+        print(f"Populating calendar")
+        calendar = self.trading_client.get_calendar()
+        self.db.populate_stock_calendar(calendar)
+
+    def clear_database(self):
+        """
+        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Clears the database by dropping all tables.
+        WARNING: This will delete all data in the database.
+        """
+        print("Clearing database")
+        self.db.clear_database()
+
+    def clear_backtest_tables(self):
+        """
+        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Clears the backtest tables by dropping them.
+        WARNING: This will delete all backtest data in the database.
+        """
+        print("Clearing backtest tables")
+        self.db.clear_backtest_tables()

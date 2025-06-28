@@ -8,8 +8,7 @@ Description:
 
 Author: Albert Marín
 Date Created: 2025-06-25
-Last Modified: 2025-06-25
-Version: 1.0.0
+Last Modified: 2025-06-28
 """
 
 
@@ -44,6 +43,41 @@ class DatabaseInterface(ABC):
         pass
 
     @abstractmethod
+    def insert_open_trade_backtest(self, position: Dict):
+        """Insert an open trade record into the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
+    def insert_close_trade_backtest(self, trade: Dict):
+        """Insert a closed trade record into the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
+    def get_open_trades_backtest(self) -> List[Dict]:
+        """Retrieve all open trades from the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
+    def get_closed_trades_backtest(self) -> List[Dict]:
+        """Retrieve all closed trades from the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
+    def delete_open_trade_backtest(self, position: Dict):
+        """Delete an open trade record from the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
     def populate_stock_calendar(self, calendar: List[datetime]):
         """Populates the calendar table with a list of Calendar objects from Alpaca."""
+        pass
+
+    @abstractmethod
+    def clear_database(self):
+        """Clears the database by dropping all tables."""
+        pass
+
+    @abstractmethod
+    def clear_backtest_tables(self):
+        """Clears the backtest tables by dropping them."""
         pass

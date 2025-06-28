@@ -14,8 +14,8 @@ elif config.MODE == "live":
 """
 
 
-from data.sqlite_database import SQLiteDatabase
-from data.data_manager import DataManager
+from data import SQLiteDatabase
+from data import DataManager
 from datetime import datetime
 
 db = SQLiteDatabase()
@@ -27,13 +27,13 @@ manager = DataManager(db)
 # manager.open_trade_qty("AAPL", 10, "buy")
 
 """ Example usage of DataManager to open a trade using notional value"""
-# manager.open_trade_notional("NVDA", 1000, "buy")
+# manager.open_position_notional("NVDA", 1000, "buy")
 
 
 """ Example usage of DataManager to retrieve open orders """
-# open_positions = manager.get_open_positions()
-# for position in open_positions:
-#     print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
+open_positions = manager.get_positions()
+for position in open_positions:
+    print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
 
 """ Example usage of DataManager to update and retrieve OHLCV data """
 # start_date = datetime(2023, 11, 1)
