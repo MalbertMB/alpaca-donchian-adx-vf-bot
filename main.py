@@ -21,6 +21,7 @@ from datetime import datetime
 db = SQLiteDatabase()
 manager = DataManager(db)
 
+
 # manager.close_trade_by_symbol("NVDA")
 
 """ Example usage of DataManager to open a trade using stock quantity"""
@@ -31,9 +32,9 @@ manager = DataManager(db)
 
 
 """ Example usage of DataManager to retrieve open orders """
-open_positions = manager.get_positions()
-for position in open_positions:
-    print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
+# open_positions = manager.get_positions()
+# for position in open_positions:
+#     print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
 
 """ Example usage of DataManager to update and retrieve OHLCV data """
 # start_date = datetime(2023, 11, 1)

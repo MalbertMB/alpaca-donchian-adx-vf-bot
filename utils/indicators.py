@@ -1,3 +1,19 @@
+"""
+Project Name: Alpaca Donchian ADX VF BOT
+File Name: indicators.py
+Description: 
+    This module contains functions to calculate the Donchian Channel, Average Directional Index (ADX),
+    and Average True Range (ATR) using optimized NumPy operations.
+    The Donchian Channel is defined by the highest high and lowest low over a specified period.
+    The ADX is a measure of trend strength derived from the smoothed directional movement indicators (DI+ and DI-).
+    The ATR is calculated using Wilder's smoothing method.
+
+Author: Albert Marín
+Date Created: 2025-06-25
+Last Modified: 2025-06-29
+"""
+
+
 import pandas as pd
 import numpy as np
 

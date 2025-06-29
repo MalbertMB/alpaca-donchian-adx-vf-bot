@@ -8,7 +8,7 @@ Description:
 
 Author: Albert Marín
 Date Created: 2025-06-25
-Last Modified: 2025-06-28
+Last Modified: 2025-06-29
 """
 
 import os
@@ -273,6 +273,48 @@ class DataManager:
         print("Retrieving closed trades for backtest")
         return self.db.get_closed_trades_backtest()
     
+
+    #
+    # Dow Jones and S&P 500 Tickers Management
+    #
+
+    def insert_dow_jones_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of Dow Jones tickers into the database.
+        Parameters:
+            tickers (List[str]): A list of Dow Jones tickers to insert.
+        """
+        print(f"Inserting Dow Jones tickers: {tickers}")
+        self.db.insert_dow_jones_tickers(tickers)
+
+    def get_dow_jones_tickers(self) -> List[str]:
+        """
+        Retrieves all Dow Jones tickers from the database.
+        Returns:
+            List[str]: A list of Dow Jones tickers.
+        """
+        print("Retrieving Dow Jones tickers")
+        return self.db.get_dow_jones_tickers()
+    
+    def insert_sp500_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of S&P 500 tickers into the database.
+        Parameters:
+            tickers (List[str]): A list of S&P 500 tickers to insert.
+        """
+        print(f"Inserting S&P 500 tickers: {tickers}")
+        self.db.insert_sp500_tickers(tickers)
+
+    def get_sp500_tickers(self) -> List[str]:
+        """
+        Retrieves all S&P 500 tickers from the database.
+        Returns:
+            List[str]: A list of S&P 500 tickers.
+        """
+        print("Retrieving S&P 500 tickers")
+        return self.db.get_sp500_tickers()
 
     #
     # Other Methods, THIS SHOULD NOT BE USED UNLESS YOU KNOW WHAT YOU ARE DOING

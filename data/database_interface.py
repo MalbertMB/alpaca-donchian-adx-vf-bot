@@ -8,7 +8,7 @@ Description:
 
 Author: Albert Marín
 Date Created: 2025-06-25
-Last Modified: 2025-06-28
+Last Modified: 2025-06-29
 """
 
 
@@ -65,6 +65,26 @@ class DatabaseInterface(ABC):
     @abstractmethod
     def delete_open_trade_backtest(self, position: Dict):
         """Delete an open trade record from the database for backtesting purposes."""
+        pass
+
+    @abstractmethod
+    def insert_dow_jones_tickers(self, tickers: List[str]):
+        """Insert a list of tickers into the database."""
+        pass
+
+    @abstractmethod
+    def get_dow_jones_tickers(self) -> List[str]:
+        """Retrieve all Dow Jones tickers from the database."""
+        pass
+
+    @abstractmethod
+    def insert_sp500_tickers(self, tickers: List[str]):
+        """Insert a list of S&P 500 tickers into the database."""
+        pass
+
+    @abstractmethod
+    def get_sp500_tickers(self) -> List[str]:
+        """Retrieve all S&P 500 tickers from the database."""
         pass
 
     @abstractmethod

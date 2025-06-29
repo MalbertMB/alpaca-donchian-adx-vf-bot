@@ -8,7 +8,6 @@ Description:
 Author: Albert Marín
 Date Created: 2025-06-25
 Last Modified: 2025-06-25
-Version: 1.0.0
 """
 
 

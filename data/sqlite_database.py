@@ -8,7 +8,7 @@ Description:
     
 Author: Albert Marín
 Date Created: 2025-06-25
-Last Modified: 2025-06-28
+Last Modified: 2025-06-29
 """
 
 
@@ -87,6 +87,18 @@ class SQLiteDatabase(DatabaseInterface):
             )
         """)
         
+        # Tickers Tables
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dow_jones_tickers (
+                symbol TEXT PRIMARY KEY
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS SP500_tickers (
+                symbol TEXT PRIMARY KEY
+            )
+        """)
+
         self.conn.commit()
 
 
@@ -255,6 +267,63 @@ class SQLiteDatabase(DatabaseInterface):
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM open_trades WHERE id = ?", (trade_id,))
         self.conn.commit()
+    
+
+    #
+    # Tickers methods
+    #
+
+    def insert_dow_jones_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of tickers into the database.
+        If a ticker already exists, it will be ignored.
+        Parameters:
+            tickers (List[str]): A list of stock symbols to insert into the database.
+        """
+        cursor = self.conn.cursor()
+        cursor.executemany("""
+            INSERT OR IGNORE INTO dow_jones_tickers (symbol)
+            VALUES (?)
+        """, [(ticker,) for ticker in tickers])
+        self.conn.commit()
+
+    def get_dow_jones_tickers(self) -> List[str]:
+        """
+        Retrieves all Dow Jones tickers from the database.
+        Returns:
+            List[str]: A list of stock symbols in the Dow Jones index.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT symbol FROM dow_jones_tickers")
+        rows = cursor.fetchall()
+        return [row[0] for row in rows]
+    
+    def insert_sp500_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of S&P 500 tickers into the database.
+        If a ticker already exists, it will be ignored.
+        Parameters:
+            tickers (List[str]): A list of stock symbols to insert into the database.
+        """
+        cursor = self.conn.cursor()
+        cursor.executemany("""
+            INSERT OR IGNORE INTO SP500_tickers (symbol)
+            VALUES (?)
+        """, [(ticker,) for ticker in tickers])
+        self.conn.commit()
+    
+    def get_sp500_tickers(self) -> List[str]:
+        """
+        Retrieves all S&P 500 tickers from the database.
+        Returns:
+            List[str]: A list of stock symbols in the S&P 500 index.
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT symbol FROM SP500_tickers")
+        rows = cursor.fetchall()
+        return [row[0] for row in rows]
 
 
     #
