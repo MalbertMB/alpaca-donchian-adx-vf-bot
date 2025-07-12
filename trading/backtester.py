@@ -18,9 +18,16 @@ class Backtester:
     def __init__(self, manager: DataManager):
         self.manager = manager
         
-    def run(self, symbols: str, start_date: datetime, end_date: datetime):
+    def run(self, group: str, start_date: datetime, end_date: datetime):
+        """
+        Runs the backtesting simulation for a given group of stocks.
+        Args:
+            group (str): The group of stocks to backtest.
+            start_date (datetime): The start date for the backtest.
+            end_date (datetime): The end date for the backtest.
+        """
         # Load historical data
-        symbols = self.manager.get_all_symbols()
+        symbols = self.manager.get_symbols_by_group(group)
         for symbol in symbols:
             ohlcv_data = self.manager.get_ohlcv_data(symbol, start_date, end_date)
             if not ohlcv_data:

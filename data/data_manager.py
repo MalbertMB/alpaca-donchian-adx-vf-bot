@@ -79,7 +79,7 @@ class DataManager:
 
         self.db.insert_ohlcv_data(symbol, data)
 
-    def get_ohlcv_data(self, symbol: str, start: datetime, end: datetime) -> List[dict]:
+    def get_ohlcv_data(self, symbol: str, start: datetime, end: datetime, update: bool = True) -> List[dict]:
         """
         Retrieves OHLCV data for a given symbol from the database.
         If the data is not available in the database, it fetches it from Alpaca and stores it.
@@ -87,12 +87,15 @@ class DataManager:
             symbol (str): The stock symbol to retrieve data for.
             start (datetime): The start date for the data.
             end (datetime): The end date for the data.
+            update (bool): Whether to update the data from Alpaca if not found in the database.
         Returns:
             List[dict]: A list of dictionaries containing OHLCV data.
         """
 
         # Check if the database has the required data
         if not self.db.has_ohlcv_data(symbol, start, end):
+            if not update:
+                raise ValueError(f"Data for {symbol} not found in database. Set update=True to fetch from Alpaca.")
             print(f"Data for {symbol} not found in database. Fetching from Alpaca...")
             self.update_ohlcv_data(symbol, start, end)
 
@@ -277,6 +280,21 @@ class DataManager:
     #
     # Dow Jones and S&P 500 Tickers Management
     #
+
+    def get_symbols_by_group(self, group: str) -> List[str]:
+        """
+        Retrieves Dow Jones or S&P 500 tickers from the database.
+        Parameters:
+            group (str): The group of tickers to retrieve ('dow_jones' or 'sp500').
+        Returns:
+            List[str]: A list of stock symbols.
+        """
+        if group == "dow_jones" or group == "Dow Jones":
+            return self.db.get_dow_jones_tickers()
+        elif group == "sp500" or group == "S&P 500" or group == "SP500" or group == "S&P500":
+            return self.db.get_sp500_tickers()
+        else:
+            raise ValueError("Invalid group. Use 'dow_jones' or 'sp500'.")
 
     def insert_dow_jones_tickers(self, tickers: List[str]):
         """
