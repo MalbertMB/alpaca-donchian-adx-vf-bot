@@ -12,7 +12,7 @@ Last Modified: 2025-06-25
 
 
 import pandas as pd
-from algorithms.strategy_interface import Strategy
+from algorithms import Strategy
 from utils import calculate_donchian, calculate_adx, calculate_atr
 
 class VolatilityBreakoutStrategy(Strategy):

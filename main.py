@@ -18,15 +18,17 @@ from data import SQLiteDatabase
 from data import DataManager
 from datetime import datetime
 from trading import Backtester
+from algorithms import VolatilityBreakoutStrategy
 
 db = SQLiteDatabase()
 manager = DataManager(db)
 
 # Example usage of Backtester
-start_date = datetime(2023, 1, 1)
-end_date = datetime(2023, 12, 31)
-backtester = Backtester(manager)
-backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
+# start_date = datetime(2023, 1, 1)
+# end_date = datetime(2023, 12, 31)
+# strategy = VolatilityBreakoutStrategy()
+# backtester = Backtester(manager, strategy)
+# backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
 
 # manager.close_trade_by_symbol("NVDA")
 
@@ -41,6 +43,7 @@ backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
 # open_positions = manager.get_positions()
 # for position in open_positions:
 #     print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
+#     manager.close_position_by_symbol(position['symbol'])
 
 """ Example usage of DataManager to update and retrieve OHLCV data """
 # start_date = datetime(2023, 11, 1)

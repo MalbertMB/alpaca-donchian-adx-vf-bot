@@ -21,18 +21,25 @@ def calculate_donchian(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
     """
     Calculate the Donchian Channel for a given DataFrame.
     The Donchian Channel is defined by the highest high and lowest low over a specified period.
-    This function adds two new columns to the DataFrame: 'donchian_high' and 'donchian_low'.
+    This function adds three new columns to the DataFrame:
+        - 'donchian_high': highest high over the period
+        - 'donchian_low': lowest low over the period
+        - 'donchian_mid': midpoint of high and low
 
     Parameters:
         df (pd.DataFrame): DataFrame containing 'high' and 'low' columns.
         period (int): The number of periods to consider for the Donchian Channel.
+
     Returns:
-        pd.DataFrame: DataFrame with additional columns 'donchian_high' and 'donchian_low'.
+        pd.DataFrame: DataFrame with additional columns 'donchian_high', 
+                      'donchian_low', and 'donchian_mid'.
     """
-    df['donchian_high'] = df['high'].rolling(window=3).max()
-    df['donchian_low'] = df['low'].rolling(window=3).min()
+    df['donchian_high'] = df['high'].rolling(window=period).max()
+    df['donchian_low'] = df['low'].rolling(window=period).min()
+    df['donchian_mid'] = (df['donchian_high'] + df['donchian_low']) / 2 # Future use for trade management (exits, trailing stops, bias filters)
 
     return df
+
 
 
 

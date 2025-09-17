@@ -233,7 +233,7 @@ class DataManager:
             print(f"Error closing position for {symbol}: {e}")
             raise e
 
-
+ 
     #
     # Backtesting Trade Management
     #
@@ -295,16 +295,7 @@ class DataManager:
             return self.db.get_sp500_tickers()
         else:
             raise ValueError("Invalid group. Use 'dow_jones' or 'sp500'.")
-
-    def insert_dow_jones_tickers(self, tickers: List[str]):
-        """
-        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Inserts a list of Dow Jones tickers into the database.
-        Parameters:
-            tickers (List[str]): A list of Dow Jones tickers to insert.
-        """
-        print(f"Inserting Dow Jones tickers: {tickers}")
-        self.db.insert_dow_jones_tickers(tickers)
+        
 
     def get_dow_jones_tickers(self) -> List[str]:
         """
@@ -315,15 +306,6 @@ class DataManager:
         print("Retrieving Dow Jones tickers")
         return self.db.get_dow_jones_tickers()
     
-    def insert_sp500_tickers(self, tickers: List[str]):
-        """
-        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Inserts a list of S&P 500 tickers into the database.
-        Parameters:
-            tickers (List[str]): A list of S&P 500 tickers to insert.
-        """
-        print(f"Inserting S&P 500 tickers: {tickers}")
-        self.db.insert_sp500_tickers(tickers)
 
     def get_sp500_tickers(self) -> List[str]:
         """
@@ -365,3 +347,23 @@ class DataManager:
         """
         print("Clearing backtest tables")
         self.db.clear_backtest_tables()
+
+    def insert_sp500_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of S&P 500 tickers into the database.
+        Parameters:
+            tickers (List[str]): A list of S&P 500 tickers to insert.
+        """
+        print(f"Inserting S&P 500 tickers: {tickers}")
+        self.db.insert_sp500_tickers(tickers)
+
+    def insert_dow_jones_tickers(self, tickers: List[str]):
+        """
+        TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Inserts a list of Dow Jones tickers into the database.
+        Parameters:
+            tickers (List[str]): A list of Dow Jones tickers to insert.
+        """
+        print(f"Inserting Dow Jones tickers: {tickers}")
+        self.db.insert_dow_jones_tickers(tickers)
