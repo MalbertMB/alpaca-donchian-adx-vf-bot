@@ -17,7 +17,7 @@ elif config.MODE == "live":
 from data import SQLiteDatabase
 from data import DataManager
 from datetime import datetime
-from trading import Backtester
+from trading import Trader
 from algorithms import VolatilityBreakoutStrategy
 
 db = SQLiteDatabase()

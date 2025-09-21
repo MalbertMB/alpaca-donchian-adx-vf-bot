@@ -19,9 +19,9 @@ class Strategy(ABC):
     Abstract base class for trading strategies.
     """
     @abstractmethod
-    def generate_entry_signals(self, data: pd.DataFrame) -> pd.Series:
+    def generate_entry_signal(self, data: pd.DataFrame) -> pd.Series:
         """
-        Generate trading signals based on the provided data.
+        Generates the trading signal for the current date based on the provided data.
 
         Parameters:
         - data (pd.DataFrame): Input data containing market information.
@@ -32,9 +32,9 @@ class Strategy(ABC):
         pass
 
     @abstractmethod
-    def generate_exit_signals(self, data: pd.DataFrame) -> pd.Series:
+    def generate_exit_signal(self, data: pd.DataFrame) -> pd.Series:
         """
-        Generate exit signals based on the provided data.
+        Generates the exit signal for the current date based on the provided data.
 
         Parameters:
         - data (pd.DataFrame): Input data containing market information.
