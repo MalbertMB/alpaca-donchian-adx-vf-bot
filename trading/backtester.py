@@ -10,15 +10,17 @@ Date Created: 2025-06-25
 Last Modified: 2025-06-29
 """
 
-
+import os
+import pandas as pd
 from data import DataManager
-from algorithms import VolatilityBreakoutStrategy
+from algorithms import Strategy
 from datetime import datetime
 from trading import Trader
+from config import OUTPUT_DIR
 
 
 class Backtester(Trader):
-    def __init__(self, manager: DataManager, strategy: VolatilityBreakoutStrategy):
+    def __init__(self, manager: DataManager, strategy: Strategy):
         self.manager = manager
         self.strategy = strategy
         
@@ -32,6 +34,8 @@ class Backtester(Trader):
         """
         # Load historical data
         symbols = self.manager.get_symbols_by_group(group)
+        print(f"Running backtest for group: {group} from {start_date} to {end_date}")
+        print(f"Symbols in group: {symbols}")
         for symbol in symbols:
             ohlcv_data = self.manager.get_ohlcv_data(symbol, start_date, end_date)
             if not ohlcv_data:
@@ -39,12 +43,35 @@ class Backtester(Trader):
                 continue
             
             # Simulate trades based on some strategy
-            self.simulate_trades(symbol, ohlcv_data)
-        data = self.manager.get_ohlcv_data(symbols[0], start_date, end_date)
-        signals = self.strategy.generate_entry_signals(data)
-        print(f"Generated signals for {group} from {start_date} to {end_date}:")
-        print(signals)
+            self.run_strategy(symbol, ohlcv_data, start_date, end_date)
 
+            # Save data and trades to results directory
+            self.save_results(symbol, ohlcv_data)
+
+    def run_strategy(self, symbol: str, ohlcv_data: list, start_date: datetime, end_date: datetime) -> None:
+        """
+        Simulates trades based on the provided strategy and OHLCV data.
+        Args:
+            symbol (str): The stock symbol.
+            ohlcv_data (list): List of OHLCV data points.
+        """
+
+        return None # Placeholder for strategy execution logic
+
+        
+
+    def save_results(self, symbol: str, ohlcv_data: list) -> None:
+        """
+        Saves the OHLCV data and simulated trades to the results directory.
+        Args:
+            symbol (str): The stock symbol.
+            ohlcv_data (list): List of OHLCV data points.
+        """
+
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+        
+        # Select relevant columns and convert to DataFrame, then save to CSV
 
     def get_balance(self, group: str) -> float:
         """

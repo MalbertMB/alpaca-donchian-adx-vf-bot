@@ -1,1 +1,2 @@
-from .strategy import strategy_interface
+from .strategy import Strategy
+from .strategy import VolatilityBreakoutStrategy

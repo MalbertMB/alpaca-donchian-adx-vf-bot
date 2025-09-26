@@ -14,7 +14,7 @@ Last Modified: 2025-06-29
 """
 
 
-import pandas as pd
+import pandas as pd # Test polar instead of pandas for speed
 import numpy as np
 
 def calculate_donchian(df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
@@ -77,7 +77,7 @@ def calculate_adx(df: pd.DataFrame, period: int = 14, return_all: bool = False) 
     tr = np.maximum.reduce([
         high - low,
         np.abs(high - prev_close),
-        np.abs(low - prev_close)
+        np.abs(low  - prev_close)
     ])
     df['tr'] = tr
 

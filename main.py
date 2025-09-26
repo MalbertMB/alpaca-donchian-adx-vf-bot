@@ -17,18 +17,19 @@ elif config.MODE == "live":
 from data import SQLiteDatabase
 from data import DataManager
 from datetime import datetime
-from trading import Trader
+from trading import Backtester
 from algorithms import VolatilityBreakoutStrategy
 
 db = SQLiteDatabase()
 manager = DataManager(db)
 
-# Example usage of Backtester
-# start_date = datetime(2023, 1, 1)
-# end_date = datetime(2023, 12, 31)
-# strategy = VolatilityBreakoutStrategy()
-# backtester = Backtester(manager, strategy)
-# backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
+
+""" Example usage of Backtester """
+start_date = datetime(2023, 1, 1)
+end_date = datetime(2023, 12, 31)
+strategy = VolatilityBreakoutStrategy()
+backtester = Backtester(manager, strategy)
+backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
 
 # manager.close_trade_by_symbol("NVDA")
 

@@ -22,3 +22,6 @@ load_dotenv()
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 ALPACA_PAPER_URL = os.getenv("ALPACA_PAPER_URL")
+
+# Backtesting results output directory
+OUTPUT_DIR = "data/results/VADX"

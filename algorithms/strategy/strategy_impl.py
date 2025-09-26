@@ -12,8 +12,8 @@ Last Modified: 2025-06-25
 
 
 import pandas as pd
-from algorithms import Strategy
-from utils import calculate_donchian, calculate_adx, calculate_atr
+from .strategy_interface import Strategy
+from algorithms.utils import calculate_donchian, calculate_adx, calculate_atr
 
 class VolatilityBreakoutStrategy(Strategy):
     def __init__(self, 
@@ -28,7 +28,7 @@ class VolatilityBreakoutStrategy(Strategy):
         self.volatility_ratio_threshold = volatility_ratio_threshold
         self.trailing_exit_period = trailing_exit_period
 
-    def generate_entry_signal(self, data: pd.DataFrame) -> pd.Series:
+    def generate_entry_signal(self, data: pd.DataFrame) -> bool:
         """ This implementation return a series of signals,
         the correct version should return a single signal for the current date """
         # df = data.copy()
@@ -63,7 +63,7 @@ class VolatilityBreakoutStrategy(Strategy):
 
         return 0
 
-    def generate_exit_signal(self, data: pd.DataFrame) -> pd.Series:
+    def generate_exit_signal(self, data: pd.DataFrame) -> bool:
         """ This implementation return a series of signals,
         the correct version should return a single signal for the current date."""
 
@@ -88,3 +88,9 @@ class VolatilityBreakoutStrategy(Strategy):
         # return exit_signal
 
         return 0
+
+    # Additional backtesting-specific methods
+
+    def backtest_signals(self, data: pd.DataFrame) -> pd.Series:
+
+        return None # Placeholder for backtesting signals logic

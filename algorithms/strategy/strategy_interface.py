@@ -19,20 +19,20 @@ class Strategy(ABC):
     Abstract base class for trading strategies.
     """
     @abstractmethod
-    def generate_entry_signal(self, data: pd.DataFrame) -> pd.Series:
+    def generate_entry_signal(self, data: pd.DataFrame) -> bool:
         """
-        Generates the trading signal for the current date based on the provided data.
+        Generates the entry signal for the current date based on the provided data.
 
         Parameters:
         - data (pd.DataFrame): Input data containing market information.
 
         Returns:
-        - pd.Series: A series of trading signals.
+        - bool: True if entry signal is generated, False otherwise.
         """
         pass
 
     @abstractmethod
-    def generate_exit_signal(self, data: pd.DataFrame) -> pd.Series:
+    def generate_exit_signal(self, data: pd.DataFrame) -> bool:
         """
         Generates the exit signal for the current date based on the provided data.
 
@@ -40,6 +40,22 @@ class Strategy(ABC):
         - data (pd.DataFrame): Input data containing market information.
 
         Returns:
-        - pd.Series: A series of exit signals.
+        - bool: True if exit signal is generated, False otherwise.
+        """
+        pass
+
+
+    # Additional backtesting-specific methods
+
+    @abstractmethod
+    def backtest_signals(self, data: pd.DataFrame) -> pd.Series:
+        """
+        Generates the backtesting signals based on the provided data.
+
+        Parameters:
+        - data (pd.DataFrame): Input data containing market information.
+
+        Returns:
+        - pd.Series: A series of backtesting signals.
         """
         pass
