@@ -12,7 +12,7 @@ Last Modified: 2025-06-29
 
 import os
 import pandas as pd
-from data import DataManager
+from database import DataManager
 from algorithms import Strategy
 from datetime import datetime
 from trading.live_trading import Trader

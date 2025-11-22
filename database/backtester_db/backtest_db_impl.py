@@ -21,7 +21,7 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetOrdersRequest,MarketOrderRequest
 from alpaca.trading.enums import OrderSide, QueryOrderStatus, OrderSide, TimeInForce
-from .sqlite_database import SQLiteDatabase
+from ..market_db.market_database import SQLiteDatabase
 
 
 class DataManager:

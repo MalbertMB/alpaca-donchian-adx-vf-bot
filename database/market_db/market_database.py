@@ -15,11 +15,10 @@ Last Modified: 2025-06-29
 import sqlite3
 from typing import List, Dict
 from datetime import datetime
-from .database_interface import DatabaseInterface
 
 
-class SQLiteDatabase(DatabaseInterface):
-    def __init__(self, db_path="data/data_base.db"):
+class MarketDatabase():
+    def __init__(self, db_path="database/market_db/market.db"):
         self.db_path = db_path
         self.conn = None
 

@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import List, Dict, Optional
 
-class DatabaseInterface(ABC):
+class TradingDatabaseInterface(ABC):
     @abstractmethod
     def connect(self):
         """Establish a database connection."""

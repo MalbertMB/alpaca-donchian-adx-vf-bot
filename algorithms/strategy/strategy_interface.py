@@ -19,6 +19,10 @@ class Strategy(ABC):
     """
     Abstract base class for trading strategies.
     """
+
+
+    # Signal generation method for live trading
+
     @abstractmethod
     def generate_signal(self, data: pd.DataFrame) -> TradingSignal:
         """
@@ -27,7 +31,7 @@ class Strategy(ABC):
         pass
 
 
-    # Additional backtesting-specific methods
+    # Signal generation method for backtesting
 
     @abstractmethod
     def generate_backtest_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:

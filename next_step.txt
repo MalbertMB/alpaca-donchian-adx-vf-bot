@@ -1,0 +1,4 @@
+Rebuild db to have 3 db's, one for the stock data (external data) big db.
+Another one for the backtest and the other to keep track of the live trading.
+Impotant: for the live trader db it need to be updated immediately after the api return 
+confirmation on the operative.
