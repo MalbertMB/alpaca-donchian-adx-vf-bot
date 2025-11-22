@@ -13,34 +13,16 @@ Last Modified: 2025-06-25
 
 from abc import ABC, abstractmethod
 import pandas as pd
+from domain import TradingSignal
 
 class Strategy(ABC):
     """
     Abstract base class for trading strategies.
     """
     @abstractmethod
-    def generate_entry_signal(self, data: pd.DataFrame) -> bool:
+    def generate_signal(self, data: pd.DataFrame) -> TradingSignal:
         """
-        Generates the entry signal for the current date based on the provided data.
-
-        Parameters:
-        - data (pd.DataFrame): Input data containing market information.
-
-        Returns:
-        - bool: True if entry signal is generated, False otherwise.
-        """
-        pass
-
-    @abstractmethod
-    def generate_exit_signal(self, data: pd.DataFrame) -> bool:
-        """
-        Generates the exit signal for the current date based on the provided data.
-
-        Parameters:
-        - data (pd.DataFrame): Input data containing market information.
-
-        Returns:
-        - bool: True if exit signal is generated, False otherwise.
+        Generates a trading signal for the current date.
         """
         pass
 
@@ -48,14 +30,14 @@ class Strategy(ABC):
     # Additional backtesting-specific methods
 
     @abstractmethod
-    def backtest_signals(self, data: pd.DataFrame) -> pd.Series:
+    def generate_backtest_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
         """
-        Generates the backtesting signals based on the provided data.
-
+        Generates entry and exit signals for backtesting based on the provided data.
         Parameters:
         - data (pd.DataFrame): Input data containing market information.
-
         Returns:
-        - pd.Series: A series of backtesting signals.
+        - tuple[pd.Series, pd.Series]: A tuple containing two pandas Series:
+            - entry_signals: pd.Series(bool)
+            - exit_signals:  pd.Series(bool)
         """
         pass

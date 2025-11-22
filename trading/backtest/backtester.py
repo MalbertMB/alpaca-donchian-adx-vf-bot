@@ -15,7 +15,7 @@ import pandas as pd
 from data import DataManager
 from algorithms import Strategy
 from datetime import datetime
-from trading import Trader
+from trading.live_trading import Trader
 from config import OUTPUT_DIR
 
 

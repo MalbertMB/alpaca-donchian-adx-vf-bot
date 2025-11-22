@@ -7,3 +7,4 @@ ta
 python-dotenv
 typing
 sqlite3
+vectorbt

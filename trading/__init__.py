@@ -1,2 +1,2 @@
-from .trader_interface import Trader
-from .backtester import Backtester
+from .backtest import Backtester
+from .live_trading import Trader
