@@ -21,7 +21,7 @@ class SignalType(Enum):
     ERROR = "error"          # Invalid data or computation failure
 
 @dataclass
-class TradingSignal:
+class Signal:
     """
     Class representing a trading signal with associated metadata.
     Attributes:
