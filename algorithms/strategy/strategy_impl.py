@@ -13,7 +13,7 @@ Last Modified: 2025-06-25
 
 import pandas as pd
 from .strategy_interface import Strategy
-from domain import TradingSignal, SignalType
+from domain import Signal, SignalType
 from algorithms.utils import calculate_donchian, calculate_adx, calculate_atr
 
 class VolatilityBreakoutStrategy(Strategy):
@@ -30,7 +30,7 @@ class VolatilityBreakoutStrategy(Strategy):
         self.trailing_exit_period = trailing_exit_period
 
     
-    def generate_signal(self, data: pd.DataFrame) -> TradingSignal:
+    def generate_signal(self, data: pd.DataFrame) -> Signal:
         return None # Placeholder for single signal generation logic
 
     # Backtesting methods

@@ -1,1 +1,1 @@
-from .market_database import MarketDataManager
+from .market_database import MarketDatabase

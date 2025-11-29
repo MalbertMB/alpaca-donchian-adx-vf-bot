@@ -13,7 +13,7 @@ Last Modified: 2025-06-25
 
 from abc import ABC, abstractmethod
 import pandas as pd
-from domain import TradingSignal
+from domain import Signal
 
 class Strategy(ABC):
     """
@@ -24,7 +24,7 @@ class Strategy(ABC):
     # Signal generation method for live trading
 
     @abstractmethod
-    def generate_signal(self, data: pd.DataFrame) -> TradingSignal:
+    def generate_signal(self, data: pd.DataFrame) -> Signal:
         """
         Generates a trading signal for the current date.
         """
@@ -34,14 +34,12 @@ class Strategy(ABC):
     # Signal generation method for backtesting
 
     @abstractmethod
-    def generate_backtest_signals(self, data: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    def generate_backtest_signals(self, data: pd.DataFrame) -> pd.Series:
         """
         Generates entry and exit signals for backtesting based on the provided data.
         Parameters:
         - data (pd.DataFrame): Input data containing market information.
         Returns:
-        - tuple[pd.Series, pd.Series]: A tuple containing two pandas Series:
-            - entry_signals: pd.Series(bool)
-            - exit_signals:  pd.Series(bool)
+        - pd.Series: A pandas Series with all the signals generated.
         """
         pass

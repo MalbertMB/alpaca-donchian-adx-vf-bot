@@ -1,14 +1,11 @@
 """
 Project Name: Alpaca Donchian ADX VF BOT
-File Name: data_manager.py
+File Name: .py
 Description: 
-    This module implements the DataManager class, which provides methods to manage market data and trades.
-    It includes methods for updating OHLCV data from Alpaca, retrieving OHLCV data, fetching and storing open trades,
-    and retrieving open trades from the database.
-
+    
 Author: Albert Marín
-Date Created: 2025-06-25
-Last Modified: 2025-06-29
+Date Created: 2025-11-25
+Last Modified: 2025-11-29
 """
 
 import sqlite3
