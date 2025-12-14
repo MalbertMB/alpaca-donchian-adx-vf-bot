@@ -13,8 +13,8 @@ import json
 
 from datetime import datetime, timezone
 from typing import Optional
-from domain import Signal, OpenPosition, Trade, Direction, QuantityType
-
+from Domain.objects import Signal, OpenPosition, Trade, Direction, QuantityType
+# Import from Domain into the Infrastructure ???? That's fucked up
 
 class BacktestDataManager:
 
@@ -193,7 +193,7 @@ class BacktestDataManager:
             (
                 run_id,
                 position.stock,
-                position.position_type.value,
+                position.direction.value,
                 position.quantity_type.value,
                 position.quantity,
                 position.date,

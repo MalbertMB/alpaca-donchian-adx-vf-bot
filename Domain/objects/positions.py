@@ -51,11 +51,17 @@ class Trade:
     """
     Class representing a completed trade.
     Attributes:
+    - stock (str): The stock ticker for which the trade was made.
+    - direction (Direction): The direction of the trade (long or short).
+    - quantity_type (QuantityType): Type of quantity used (capital or shares).
+    - quantity (int): The number of shares/contracts traded.
+    - entry_price (float): The price at which the position was entered.
     - exit_price (float): The price at which the position was exited.
-    - exit_date (pd.Timestamp): The date when the position was closed.
-    - profit_loss (float): The profit or loss from the trade.
-    - entry_signal_id (int): Identifier of the signal that closed the position.
-    - exit_signal_id (int): Identifier of the signal that closed the position.
+    - entry_date (pd.Timestamp): Date and time where the position was entered.
+    - exit_date (pd.Timestamp): Date and time where the position was exited.
+    - result (float): The profit or loss from the trade.
+    - entry_signal_id (int): The identifier of the signal that generated the entry.
+    - exit_signal_id (int): The identifier of the signal that generated the exit.
     - id (int): Unique identifier for the trade, assigned by the database.
     """
     stock: str

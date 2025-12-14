@@ -12,11 +12,10 @@ Last Modified: 2025-06-29
 
 import os
 import pandas as pd
-from database import DataManager
-from algorithms import Strategy
+from Infrastucture import DataManager
+from Domain.algorithms import Strategy
 from datetime import datetime
-from trading.live_trading import Trader
-from config import OUTPUT_DIR
+from Application.live_trading import Trader
 
 
 class Backtester(Trader):
@@ -59,19 +58,6 @@ class Backtester(Trader):
         return None # Placeholder for strategy execution logic
 
         
-
-    def save_results(self, symbol: str, ohlcv_data: list) -> None:
-        """
-        Saves the OHLCV data and simulated trades to the results directory.
-        Args:
-            symbol (str): The stock symbol.
-            ohlcv_data (list): List of OHLCV data points.
-        """
-
-        if not os.path.exists(OUTPUT_DIR):
-            os.makedirs(OUTPUT_DIR)
-        
-        # Select relevant columns and convert to DataFrame, then save to CSV
 
     def get_balance(self, group: str) -> float:
         """

@@ -13,7 +13,7 @@ Last Modified: 2025-06-25
 
 import pandas as pd
 from .strategy_interface import Strategy
-from domain import Signal, SignalType
+from objects import Signal, SignalType
 from algorithms.utils import calculate_donchian, calculate_adx, calculate_atr
 
 class VolatilityBreakoutStrategy(Strategy):

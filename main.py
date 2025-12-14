@@ -14,10 +14,9 @@ elif config.MODE == "live":
 """
 
 
-from database import BacktestDataManager
+from Infrastucture import BacktestDataManager
 from datetime import datetime
-from trading import Backtester
-from algorithms import VolatilityBreakoutStrategy
+from Application import Backtester
 
 db = BacktestDataManager(db_path="database/backtester/backtester.db")
 

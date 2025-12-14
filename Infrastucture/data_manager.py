@@ -1,7 +1,7 @@
 # databases/market/market_data_manager.py
 
 from .market.market_database import MarketDatabase
-from database.interfaces import TradingDatabaseInterface
+from Infrastucture.interfaces import TradingDatabaseInterface
 
 
 class MarketDataManager:
@@ -46,7 +46,6 @@ Last Modified: 2025-06-29
 import os
 from datetime import datetime
 from typing import List
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER_URL
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.timeframe import TimeFrame
@@ -57,7 +56,7 @@ from .interfaces import TradingDatabaseInterface
 
 
 class DataManager:
-    def __init__(self, db: TradingDatabaseInterface):
+    def __init__(self, db: TradingDatabaseInterface, ALPACA_API_KEY: str, ALPACA_SECRET_KEY: str):
         self.db = db
         self.db.connect()
 

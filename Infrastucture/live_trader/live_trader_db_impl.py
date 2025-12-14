@@ -13,7 +13,7 @@ Last Modified: 2025-06-29
 
 import sqlite3
 from ..interfaces import TradingDatabaseInterface
-from domain import Trade, Position
+from Domain.objects import Trade, Position
 
 
 class BacktestDataManager(TradingDatabaseInterface):

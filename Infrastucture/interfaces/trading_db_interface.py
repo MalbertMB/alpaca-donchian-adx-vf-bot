@@ -12,7 +12,7 @@ Last Modified: 2025-06-29
 
 
 from abc import ABC, abstractmethod
-from domain import Position, Trade
+from Domain.objects import Position, Trade
 
 class TradingDatabaseInterface(ABC):
     """

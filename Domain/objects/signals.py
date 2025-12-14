@@ -27,9 +27,11 @@ class Signal:
     Attributes:
     - stock (str): The stock ticker for which the signal is generated.
     - signal (SignalType): The type of trading signal.
-    - confidence (float): Confidence level of the signal (default is -1, unknown).
-    - reason (str): Description of why the signal was generated.
     - date (pd.Timestamp): The date and time where the signal was generated.
+    - price (float): The price at which the signal was generated.
+    - confidence (float): Confidence level of the signal (default is -1, unknown).
+    - reason (str): Description of why the signal was generated. (default is empty string).
+    - id (int): Unique identifier for the signal, assigned by the database.
     """
     stock: str
     signal: SignalType
@@ -37,3 +39,4 @@ class Signal:
     price: float
     confidence: float = -1
     reason: str = ""
+    id: int | None = None
