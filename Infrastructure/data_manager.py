@@ -1,7 +1,7 @@
 # databases/market/market_data_manager.py
 
 from .market.market_database import MarketDatabase
-from Infrastucture.interfaces import TradingDatabaseInterface
+from Infrastructure.interfaces import TradingDatabaseInterface
 
 
 class MarketDataManager:

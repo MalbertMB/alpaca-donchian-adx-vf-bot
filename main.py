@@ -14,7 +14,7 @@ elif config.MODE == "live":
 """
 
 
-from Infrastucture import BacktestDataManager
+from Infrastructure import BacktestDataManager
 from datetime import datetime
 from Application import Backtester
 
