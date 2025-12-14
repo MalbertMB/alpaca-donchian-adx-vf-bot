@@ -1,2 +1,2 @@
 from .signals import Signal, SignalType
-from .positions import Position, PositionType, PositionQuantity, Trade
+from .positions import OpenPosition, Trade, Direction, QuantityType
