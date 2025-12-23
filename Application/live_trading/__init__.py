@@ -1,1 +1,1 @@
-from .trader_interface import Trader
+from ..interfaces.trader_interface import Trader

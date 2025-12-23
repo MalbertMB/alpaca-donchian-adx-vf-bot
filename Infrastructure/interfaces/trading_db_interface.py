@@ -12,7 +12,7 @@ Last Modified: 2025-06-29
 
 
 from abc import ABC, abstractmethod
-from Domain.objects import Position, Trade
+from Domain import OpenPosition, Trade
 
 class TradingDatabaseInterface(ABC):
     """
@@ -26,11 +26,11 @@ class TradingDatabaseInterface(ABC):
         pass
 
     @abstractmethod
-    def save_position(self, position: Position) -> None:
+    def save_position(self, position: OpenPosition) -> None:
         """Store position information."""
         pass
 
     @abstractmethod
-    def get_positions(self) -> list[Position]:
+    def get_positions(self) -> list[OpenPosition]:
         """Return a list of open positions."""
         pass

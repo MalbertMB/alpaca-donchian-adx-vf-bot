@@ -12,10 +12,11 @@ Last Modified: 2025-06-29
 
 import os
 import pandas as pd
-from Infrastructure import DataManager
-from Domain.algorithms import Strategy
 from datetime import datetime
-from Application.live_trading import Trader
+
+from Infrastructure import DataManager
+from Domain import Strategy
+from Application import Trader
 
 
 class Backtester(Trader):

@@ -58,7 +58,6 @@ from .interfaces import TradingDatabaseInterface
 class DataManager:
     def __init__(self, db: TradingDatabaseInterface, ALPACA_API_KEY: str, ALPACA_SECRET_KEY: str):
         self.db = db
-        self.db.connect()
 
         self.api_key = ALPACA_API_KEY
         self.secret_key = ALPACA_SECRET_KEY

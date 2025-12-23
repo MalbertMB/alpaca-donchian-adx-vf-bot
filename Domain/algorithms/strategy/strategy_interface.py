@@ -13,7 +13,7 @@ Last Modified: 2025-06-25
 
 from abc import ABC, abstractmethod
 import pandas as pd
-from objects import Signal
+from ...objects import Signal
 
 class Strategy(ABC):
     """

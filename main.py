@@ -18,7 +18,7 @@ from Infrastructure import BacktestDataManager
 from datetime import datetime
 from Application import Backtester
 
-db = BacktestDataManager(db_path="database/backtester/backtester.db")
+db = BacktestDataManager(db_path="Infrastructure/backtester/backtester.db")
 
 
 """ Example usage of Backtester """
