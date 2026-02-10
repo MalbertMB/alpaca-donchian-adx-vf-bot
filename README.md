@@ -46,22 +46,27 @@ ALPACA-DONCHIAN-ADX-VF-BOT
 
 ### Installation
 1. Clone the repository:
-   git clone https://github.com/your-repo/alpaca-donchian-bot.git
-   cd alpaca-donchian-bot
+```text
+   git clone https://github.com/MalbertMB/alpaca-donchian-adx-vf-bot.git
+   cd alpaca-donchian-adx-vf-bot
+```
 
 2. Set up a virtual environment:
+```text
    python -m venv .venv
    source .venv/bin/activate  # Windows: .venv\Scripts\activate
+```
 
 3. Install dependencies:
    pip install -r requirements.txt
 
 4. Configure Environment Variables:
    Create a .env file in the root directory:
+```text
    ALPACA_API_KEY=your_key_here
    ALPACA_SECRET_KEY=your_secret_here
    BASE_URL=https://paper-api.alpaca.markets
-
+```
 ---
 
 ## Strategy Overview
