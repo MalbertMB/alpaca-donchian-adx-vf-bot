@@ -1,7 +1,8 @@
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.3
 aiosignal==1.4.0
-alpaca-trade-api==3.2.0
+alpaca-py==0.43.2
+annotated-types==0.7.0
 asttokens==3.0.1
 attrs==25.4.0
 certifi==2026.1.4
@@ -44,6 +45,8 @@ prompt_toolkit==3.0.52
 propcache==0.4.1
 ptyprocess==0.7.0
 pure_eval==0.2.3
+pydantic==2.12.5
+pydantic_core==2.41.5
 Pygments==2.19.2
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
@@ -56,11 +59,13 @@ schedule==1.2.2
 scikit-learn==1.8.0
 scipy==1.17.0
 six==1.17.0
+sseclient-py==1.9.0
 stack-data==0.6.3
 ta==0.11.0
 threadpoolctl==3.6.0
 tqdm==4.67.1
 traitlets==5.14.3
+typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzlocal==5.3.1
 urllib3==1.26.20
