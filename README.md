@@ -58,9 +58,10 @@ ALPACA-DONCHIAN-ADX-VF-BOT
 ```
 
 3. Install dependencies:
+```text
    pip install -r requirements.txt
-
-4. Configure Environment Variables:
+```
+5. Configure Environment Variables:
    Create a .env file in the root directory:
 ```text
    ALPACA_API_KEY=your_key_here
