@@ -1,6 +1,6 @@
 ```mermaid
 classDiagram
-    %% --- Existing Architecture ---
+    %% --- Core System ---
     class DataManager {
         +MarketData market
         +TradingInterface trading
@@ -23,7 +23,7 @@ classDiagram
     TradingInterface <|-- BacktestEngine
     TradingInterface <|-- LiveEngine
 
-    %% --- New Enums from signals.py & positions.py ---
+    %% --- Domain Layer (common.py) ---
     class SignalType {
         <<enumeration>>
         NONE
@@ -43,10 +43,11 @@ classDiagram
         CAPITAL
     }
 
-    %% --- New Data Classes ---
+    %% --- Domain Layer (signals.py) ---
     class Signal {
         +str stock
         +SignalType signal
+        +Direction direction
         +pd.Timestamp date
         +float price
         +float confidence
@@ -54,13 +55,14 @@ classDiagram
         +int id
     }
 
+    %% --- Domain Layer (positions.py) ---
     class OpenPosition {
         +str stock
         +Direction direction
         +pd.Timestamp date
         +float entry_price
         +QuantityType quantity_type
-        +int quantity
+        +float quantity
         +int entry_signal_id
         +int id
     }
@@ -69,19 +71,22 @@ classDiagram
         +str stock
         +Direction direction
         +QuantityType quantity_type
-        +int quantity
+        +float quantity
         +float entry_price
         +float exit_price
         +pd.Timestamp entry_date
         +pd.Timestamp exit_date
-        +float result
+        +float gross_result
+        +float commission
+        +float net_result
         +int entry_signal_id
         +int exit_signal_id
         +int id
     }
 
-    %% --- Relationships for Data Objects ---
+    %% --- Relationships ---
     Signal ..> SignalType : uses
+    Signal ..> Direction : uses
     OpenPosition ..> Direction : uses
     OpenPosition ..> QuantityType : uses
     Trade ..> Direction : uses

@@ -1,2 +1,2 @@
-One of the 3 db implemented, compiles but it hasn't been tested xd
-Test it and implement the datamanager, the live trader can wait for now
+Backtester db implemented and tested with simple cases, explore complex scenarios and possible bugs.
+Implement the live trader db manager and the overall trader interface.

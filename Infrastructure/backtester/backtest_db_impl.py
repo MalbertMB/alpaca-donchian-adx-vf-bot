@@ -10,10 +10,11 @@ Last Modified: 2025-11-29
 
 import sqlite3
 import json
+import pandas as pd
 
 from datetime import datetime, timezone
 from typing import Optional
-from Domain import Signal, OpenPosition, Trade, Direction, QuantityType
+from Domain import Signal, OpenPosition, Trade, Direction, QuantityType, SignalType
 
 
 class BacktestDataManager:
@@ -30,6 +31,10 @@ class BacktestDataManager:
         self.conn.execute("PRAGMA foreign_keys = ON;") 
         self.cursor = self.conn.cursor()
         self._create_tables()
+
+    def close(self):
+        if self.conn:
+            self.conn.close()
 
 
     def _create_tables(self):
@@ -50,16 +55,17 @@ class BacktestDataManager:
             signal_id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id INTEGER NOT NULL,
             stock TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            date TIMESTAMP,
             signal_type TEXT NOT NULL,
             price REAL,
             confidence REAL,
             reason TEXT,
-            timestamp TIMESTAMP,
             FOREIGN KEY(run_id) REFERENCES backtest_run(run_id)
         );
 
         CREATE TABLE IF NOT EXISTS open_position (
-            position_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            open_position_id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id INTEGER NOT NULL,
             stock TEXT NOT NULL,
             direction TEXT NOT NULL,
@@ -83,13 +89,20 @@ class BacktestDataManager:
             exit_price REAL,
             entry_date TIMESTAMP,
             exit_date TIMESTAMP,
-            result REAL,
+            gross_result REAL,
+            commission REAL,
+            net_result REAL,
             entry_signal_id INTEGER,
             exit_signal_id INTEGER,
             FOREIGN KEY(run_id) REFERENCES backtest_run(run_id),
             FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id),
             FOREIGN KEY(exit_signal_id) REFERENCES signal(signal_id)
         );
+
+        CREATE INDEX IF NOT EXISTS idx_signal_run ON signal(run_id);
+        CREATE INDEX IF NOT EXISTS idx_position_run ON open_position(run_id);
+        CREATE INDEX IF NOT EXISTS idx_trade_run ON trade(run_id);
+        CREATE INDEX IF NOT EXISTS idx_trade_entry_sig ON trade(entry_signal_id);
         """
         self.cursor.executescript(schema)
         self.conn.commit()
@@ -188,34 +201,38 @@ class BacktestDataManager:
             int: The ID of the newly created signal.
         """
 
+        date_value = signal.date.to_pydatetime() if isinstance(signal.date, pd.Timestamp) else signal.date
+
         cur = self.cursor.execute(
             """
             INSERT INTO signal (
                 run_id,
                 stock,
+                direction,
+                date,
                 signal_type,
                 price,
                 confidence,
-                reason,
-                timestamp
+                reason
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
                 signal.stock,
-                signal.signal.value,
+                signal.direction.value,
+                date_value,
+                signal.signal_type.value,
                 signal.price,
                 signal.confidence,
                 signal.reason,
-                signal.date,
             ),
         )
 
-        signal.id = cur.lastrowid
-        return signal.id
+        signal.signal_id = cur.lastrowid
+        return signal.signal_id
 
-    def insert_openposition(self, run_id: int, position: OpenPosition) -> int:
+    def insert_open_position(self, run_id: int, position: OpenPosition) -> int:
         """
         Inserts a new open position into the database and assigns its ID.
         This method does not commit changes, the caller must handle committing.
@@ -225,6 +242,8 @@ class BacktestDataManager:
         Returns:
             int: The ID of the newly created open position.
         """
+
+        date_value = position.date.to_pydatetime() if isinstance(position.date, pd.Timestamp) else position.date
 
         cur = self.cursor.execute(
             """
@@ -244,7 +263,7 @@ class BacktestDataManager:
                 run_id,
                 position.stock,
                 position.direction.value,
-                position.date,
+                date_value,
                 position.entry_price,
                 position.quantity_type.value,
                 position.quantity,
@@ -252,13 +271,14 @@ class BacktestDataManager:
             ),
         )
         
-        position.id = cur.lastrowid
-        return position.id
+        position.open_position_id = cur.lastrowid
+        return position.open_position_id
 
 
     def _insert_trade(self, run_id: int, trade: Trade) -> int:
         """
         Inserts a new trade into the database and assigns its ID.
+        This method is intended for internal use when closing positions, as it does not handle deleting the open position or committing the transaction.
         This method does not commit changes, the caller must handle committing.
         Args:
             run_id (int): The ID of the backtest run.
@@ -266,6 +286,9 @@ class BacktestDataManager:
         Returns:
             int: The ID of the newly created trade.
         """
+
+        entry_date_value = trade.entry_date.to_pydatetime() if isinstance(trade.entry_date, pd.Timestamp) else trade.entry_date
+        exit_date_value = trade.exit_date.to_pydatetime() if isinstance(trade.exit_date, pd.Timestamp) else trade.exit_date
 
         cur = self.cursor.execute(
             """
@@ -279,11 +302,13 @@ class BacktestDataManager:
                 exit_price,
                 entry_date,
                 exit_date,
-                result,
+                gross_result,
+                commission,
+                net_result,
                 entry_signal_id,
                 exit_signal_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 run_id,
@@ -293,19 +318,21 @@ class BacktestDataManager:
                 trade.quantity,
                 trade.entry_price,
                 trade.exit_price,
-                trade.entry_date,
-                trade.exit_date,
-                trade.result,
+                entry_date_value,
+                exit_date_value,
+                trade.gross_result,
+                trade.commission,
+                trade.net_result,
                 trade.entry_signal_id,
                 trade.exit_signal_id
 
             ),
         )
-        trade.id = cur.lastrowid
-        return trade.id
+        trade.trade_id = cur.lastrowid
+        return trade.trade_id
     
 
-    def close_openposition(self, run_id: int, position: OpenPosition, trade: Trade):
+    def close_open_position(self, run_id: int, position: OpenPosition, trade: Trade):
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
         Args:
@@ -320,8 +347,8 @@ class BacktestDataManager:
             trade_id = self._insert_trade(run_id, trade)
             
             self.cursor.execute(
-                "DELETE FROM open_position WHERE position_id = ?", 
-                (position.id,)
+                "DELETE FROM open_position WHERE open_position_id = ?", 
+                (position.open_position_id,)
             )
             
             self.conn.commit()
@@ -349,12 +376,14 @@ class BacktestDataManager:
             data = dict(row)
             signal = Signal(
                 stock=data['stock'],
-                signal=Direction(data['signal_type']),
-                date=data['timestamp'],
+                signal_type=SignalType(data['signal_type']),
+                direction=Direction(data['direction']),
+                date=pd.Timestamp(data['date']),
                 price=data['price'],
                 confidence=data['confidence'],
                 reason=data['reason'],
-                id=data['signal_id']
+                signal_id=data['signal_id'],
+                run_id=data['run_id']
             )
             signals.append(signal)
         return signals
@@ -377,12 +406,13 @@ class BacktestDataManager:
             position = OpenPosition(
                 stock=data['stock'],
                 direction=Direction(data['direction']),
-                date=data['date'],
+                date=pd.Timestamp(data['date']),
                 entry_price=data['entry_price'],
                 quantity_type=QuantityType(data['quantity_type']),
                 quantity=data['quantity'],
                 entry_signal_id=data['entry_signal_id'],
-                id=data['position_id']
+                open_position_id=data['open_position_id'],
+                run_id=data['run_id']
             )
             positions.append(position)
         return positions
@@ -408,12 +438,15 @@ class BacktestDataManager:
                 quantity=data['quantity'],
                 entry_price=data['entry_price'],
                 exit_price=data['exit_price'],
-                entry_date=data['entry_date'],
-                exit_date=data['exit_date'],
-                result=data['result'],
+                entry_date=pd.Timestamp(data['entry_date']),
+                exit_date=pd.Timestamp(data['exit_date']),
+                gross_result=data['gross_result'],
+                commission=data['commission'],
+                net_result=data['net_result'],
                 entry_signal_id=data['entry_signal_id'],
                 exit_signal_id=data['exit_signal_id'],
-                id=data['trade_id']
+                trade_id=data['trade_id'],
+                run_id=data['run_id']
             )
             trades.append(trade)
         return trades

@@ -23,7 +23,8 @@ class OpenPosition:
     - quantity_type (QuantityType): Method used to size the position.
     - quantity (float): Number of shares/contracts (Float for fractional support).
     - entry_signal_id (int): ID of the signal that triggered this position.
-    - id (int | None): Unique identifier assigned by database.
+    - open_position_id (int | None): Unique identifier assigned by database.
+    - run_id (int | None): Identifier for the backtest or live run this position belongs to.
     """
     stock: str
     direction: Direction
@@ -32,7 +33,8 @@ class OpenPosition:
     quantity_type: QuantityType
     quantity: float  # Changed to float for fractional shares
     entry_signal_id: int
-    id: int | None = None
+    open_position_id: int | None = None
+    run_id: int | None = None  # Added to link to backtest/live run
 
 
 @dataclass
@@ -53,7 +55,8 @@ class Trade:
     - net_result (float): gross_result - commission.
     - entry_signal_id (int): ID of entry signal.
     - exit_signal_id (int): ID of exit signal.
-    - id (int | None): Unique identifier assigned by database.
+    - trade_id (int | None): Unique identifier assigned by database.
+    - run_id (int | None): Identifier for the backtest or live run this trade belongs to.
     """
     stock: str
     direction: Direction
@@ -68,13 +71,16 @@ class Trade:
     net_result: float
     entry_signal_id: int
     exit_signal_id: int
-    id: int | None = None
+    trade_id: int | None = None
+    run_id: int | None = None  # Added to link to backtest/live run
 
     def __post_init__(self):
         """
         Auto-calculate results if they are not explicitly provided.
         Useful for backtesting where commission might be estimated.
         """
+        # Ensure quantity is positive
+        self.quantity = abs(self.quantity)
         # Calculate Gross Result if missing
         if self.gross_result is None or self.gross_result == 0.0:
             multiplier = 1 if self.direction == Direction.LONG else -1

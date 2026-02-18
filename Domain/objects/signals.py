@@ -17,19 +17,21 @@ class Signal:
     Class representing a trading signal with associated metadata.
     Attributes:
     - stock (str): The stock ticker for which the signal is generated.
-    - signal (SignalType): The type of trading signal (ENTRY, EXIT, etc.).
+    - signal_type (SignalType): The type of trading signal (ENTRY, EXIT, etc.).
     - direction (Direction): The intended direction (LONG/SHORT).
     - date (pd.Timestamp): The date and time where the signal was generated.
     - price (float): The price at which the signal was generated.
     - confidence (float): Confidence level of the signal (default -1).
     - reason (str): Description of why the signal was generated.
-    - id (int | None): Unique identifier assigned by database.
+    - signal_id (int | None): Unique identifier assigned by database.
+    - run_id (int | None): Identifier for the backtest or live run this signal belongs to.
     """
     stock: str
-    signal: SignalType
+    signal_type: SignalType
     direction: Direction  # Added to specify Long/Short intent
     date: pd.Timestamp
     price: float
     confidence: float = -1
     reason: str = ""
-    id: int | None = None
+    signal_id: int | None = None
+    run_id: int | None = None
