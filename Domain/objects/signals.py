@@ -2,23 +2,14 @@
 Project Name: Alpaca Donchian ADX VF BOT
 File Name: signals.py
 Description: 
-    This module defines trading signal types and a class to represent trading signals
-    with associated metadata such as confidence and reason.
+    Defines the Signal data class representing trading opportunities.
 Author: Albert Marín
-Date Created: 2025-11-22
+Date Created: 2026-02-18
 """
 
-
 from dataclasses import dataclass
-from enum import Enum
 import pandas as pd
-
-class SignalType(Enum):
-    NONE = "none"
-    ENTRY = "entry"
-    EXIT = "exit"
-    REVERSE = "reverse"      # To flip positions
-    ERROR = "error"          # Invalid data or computation failure
+from .common import SignalType, Direction
 
 @dataclass
 class Signal:
@@ -26,15 +17,17 @@ class Signal:
     Class representing a trading signal with associated metadata.
     Attributes:
     - stock (str): The stock ticker for which the signal is generated.
-    - signal (SignalType): The type of trading signal.
+    - signal (SignalType): The type of trading signal (ENTRY, EXIT, etc.).
+    - direction (Direction): The intended direction (LONG/SHORT).
     - date (pd.Timestamp): The date and time where the signal was generated.
     - price (float): The price at which the signal was generated.
-    - confidence (float): Confidence level of the signal (default is -1, unknown).
-    - reason (str): Description of why the signal was generated. (default is empty string).
-    - id (int): Unique identifier for the signal, assigned by the database.
+    - confidence (float): Confidence level of the signal (default -1).
+    - reason (str): Description of why the signal was generated.
+    - id (int | None): Unique identifier assigned by database.
     """
     stock: str
     signal: SignalType
+    direction: Direction  # Added to specify Long/Short intent
     date: pd.Timestamp
     price: float
     confidence: float = -1

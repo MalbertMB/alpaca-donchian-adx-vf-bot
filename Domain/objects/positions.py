@@ -2,77 +2,84 @@
 Project Name: Alpaca Donchian ADX VF BOT
 File Name: positions.py
 Description: 
-    This module defines data structures and classes related to trading positions.
+    Defines data structures for active positions and completed trades.
 Author: Albert Marín
 Date Created: 2025-11-22
 """
 
 from dataclasses import dataclass
-from enum import Enum
 import pandas as pd
-from .signals import Signal
-
-class Direction(Enum):
-    LONG = "long"
-    SHORT = "short"
-
-class QuantityType(Enum):
-    SHARES = "shares"
-    CAPITAL = "capital"
-
+from .common import Direction, QuantityType
 
 @dataclass
 class OpenPosition:
     """
-    Class representing a trading position.
+    Class representing an active trading position.
     Attributes:
-    - stock (str): The stock ticker for which the position is held.
-    - position_type (PositionType): The type of trading position.
-    - date (pd.Timestamp): Date and time where the position was oppened.
-    - entry_price (float): The price at which the position was entered.
-    - quantity_type (PositionQuantity): Type of quantity used (capital or shares). 
-    - quantity (int): The number of shares/contracts held in the position.
-    - entry_signal_id (int): The identifier of the signal that generated the position.
-    - id (int): Unique identifier for the position, assigned by the database.
+    - stock (str): The stock ticker.
+    - direction (Direction): Long or Short.
+    - date (pd.Timestamp): Date/time position was opened.
+    - entry_price (float): Price at which position was entered.
+    - quantity_type (QuantityType): Method used to size the position.
+    - quantity (float): Number of shares/contracts (Float for fractional support).
+    - entry_signal_id (int): ID of the signal that triggered this position.
+    - id (int | None): Unique identifier assigned by database.
     """
     stock: str
     direction: Direction
     date: pd.Timestamp
     entry_price: float
     quantity_type: QuantityType
-    quantity: int
+    quantity: float  # Changed to float for fractional shares
     entry_signal_id: int
     id: int | None = None
-
 
 
 @dataclass
 class Trade:
     """
-    Class representing a completed trade.
+    Class representing a completed trade (Round trip).
     Attributes:
-    - stock (str): The stock ticker for which the trade was made.
-    - direction (Direction): The direction of the trade (long or short).
-    - quantity_type (QuantityType): Type of quantity used (capital or shares).
-    - quantity (int): The number of shares/contracts traded.
-    - entry_price (float): The price at which the position was entered.
-    - exit_price (float): The price at which the position was exited.
-    - entry_date (pd.Timestamp): Date and time where the position was entered.
-    - exit_date (pd.Timestamp): Date and time where the position was exited.
-    - result (float): The profit or loss from the trade.
-    - entry_signal_id (int): The identifier of the signal that generated the entry.
-    - exit_signal_id (int): The identifier of the signal that generated the exit.
-    - id (int): Unique identifier for the trade, assigned by the database.
+    - stock (str): The stock ticker.
+    - direction (Direction): Long or Short.
+    - quantity_type (QuantityType): Method used to size the position.
+    - quantity (float): Number of shares/contracts traded.
+    - entry_price (float): Average entry price.
+    - exit_price (float): Average exit price.
+    - entry_date (pd.Timestamp): Date/time entered.
+    - exit_date (pd.Timestamp): Date/time exited.
+    - gross_result (float): Raw PnL (Price diff * quantity).
+    - commission (float): Total fees/commissions for the trade.
+    - net_result (float): gross_result - commission.
+    - entry_signal_id (int): ID of entry signal.
+    - exit_signal_id (int): ID of exit signal.
+    - id (int | None): Unique identifier assigned by database.
     """
     stock: str
     direction: Direction
     quantity_type: QuantityType
-    quantity: int
+    quantity: float
     entry_price: float
     exit_price: float
     entry_date: pd.Timestamp
     exit_date: pd.Timestamp
-    result: float
+    gross_result: float
+    commission: float 
+    net_result: float
     entry_signal_id: int
     exit_signal_id: int
     id: int | None = None
+
+    def __post_init__(self):
+        """
+        Auto-calculate results if they are not explicitly provided.
+        Useful for backtesting where commission might be estimated.
+        """
+        # Calculate Gross Result if missing
+        if self.gross_result is None or self.gross_result == 0.0:
+            multiplier = 1 if self.direction == Direction.LONG else -1
+            self.gross_result = (self.exit_price - self.entry_price) * self.quantity * multiplier
+        
+        # Calculate Net Result if missing
+        if self.net_result is None or self.net_result == 0.0:
+            self.net_result = self.gross_result - (self.commission if self.commission else 0.0)
