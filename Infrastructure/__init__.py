@@ -1,2 +1,2 @@
-from .backtester import BacktestDataManager
+from .backtester import BacktestDataBaseManager
 from .data_manager import DataManager

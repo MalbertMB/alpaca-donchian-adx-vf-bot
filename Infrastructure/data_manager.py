@@ -1,7 +1,7 @@
 # databases/market/market_data_manager.py
 
 from .market.market_database import MarketDatabase
-from Infrastructure.interfaces import TradingDatabaseInterface
+from Infrastructure.interfaces import TradingDataBaseInterface
 
 
 class MarketDataManager:
@@ -10,7 +10,7 @@ class MarketDataManager:
     Reads market data and writes signals/trades to the injected database.
     """
 
-    def __init__(self, market_db: MarketDatabase, trade_db: TradingDatabaseInterface):
+    def __init__(self, market_db: MarketDatabase, trade_db: TradingDataBaseInterface):
         self.market_db = market_db
         self.trade_db = trade_db
 
@@ -52,11 +52,11 @@ from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import GetOrdersRequest,MarketOrderRequest
 from alpaca.trading.enums import OrderSide, QueryOrderStatus, OrderSide, TimeInForce
-from .interfaces import TradingDatabaseInterface
+from .interfaces import TradingDataBaseInterface
 
 
 class DataManager:
-    def __init__(self, db: TradingDatabaseInterface, ALPACA_API_KEY: str, ALPACA_SECRET_KEY: str):
+    def __init__(self, db: TradingDataBaseInterface, ALPACA_API_KEY: str, ALPACA_SECRET_KEY: str):
         self.db = db
 
         self.api_key = ALPACA_API_KEY

@@ -1,1 +1,1 @@
-from .backtest_db_impl import BacktestDataManager
+from .backtest_db_impl import BacktestDataBaseManager

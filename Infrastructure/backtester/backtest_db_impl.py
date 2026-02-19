@@ -1,11 +1,14 @@
 """
 Project Name: Alpaca Donchian ADX VF BOT
-File Name: .py
+File Name: backtest_db_impl.py
 Description: 
+    This module implements the TradingDataBaseInterface for backtesting scenarios using SQLite.
+    It provides methods to manage backtest runs, signals, open positions, and trades, allowing for efficient
+    data storage and retrieval during backtests.
     
-Author: Albert Marín
+Author: Albert Marín Blasco
 Date Created: 2025-11-25
-Last Modified: 2025-11-29
+Last Modified: 2026-02-19
 """
 
 import sqlite3
@@ -13,15 +16,16 @@ import json
 import pandas as pd
 
 from datetime import datetime, timezone
-from typing import Optional
+from ..interfaces import TradingDataBaseInterface
 from Domain import Signal, OpenPosition, Trade, Direction, QuantityType, SignalType
 
 
-class BacktestDataManager:
+class BacktestDataBaseManager(TradingDataBaseInterface):
+
 
     def __init__(self, db_path: str):
         """
-        Initializes the BacktestDataManager with a SQLite database connection.
+        Initializes the BacktestDataBaseManager with a SQLite database connection.
         If the database or tables do not exist, they will be created.
         Args:
             db_path (str): Path to the SQLite database file.
@@ -31,10 +35,19 @@ class BacktestDataManager:
         self.conn.execute("PRAGMA foreign_keys = ON;") 
         self.cursor = self.conn.cursor()
         self._create_tables()
+        self.current_run_id = None
 
     def close(self):
+        """
+        Closes the database connection. Should be called when the database is no longer needed to free up resources.
+        """
         if self.conn:
             self.conn.close()
+
+
+    def commit(self):
+        """Manual commit to allow batching during backtests."""
+        self.conn.commit()
 
 
     def _create_tables(self):
@@ -108,11 +121,6 @@ class BacktestDataManager:
         self.conn.commit()
 
 
-    def commit(self):
-        """Manual commit to allow batching during backtests."""
-        self.conn.commit()
-
-
     def create_backtest_run(self, strategy_name: str, strategy_version: str, parameters: dict,
                             data_start: datetime, data_end: datetime ) -> int:
         """
@@ -151,14 +159,16 @@ class BacktestDataManager:
             ),
         )
         self.conn.commit()
-        return cur.lastrowid
+
+        # Store the current run ID for use in subsequent operations
+        self.current_run_id = cur.lastrowid
+        return self.current_run_id
     
 
-    def close_backtest_run(self, run_id: int):
+    def close_backtest_run(self):
         """
         Updates the end_time of a backtest run to mark its completion.
-        Args:
-            run_id (int): The ID of the backtest run to close.    
+        This method should be called when a backtest run is finished to record the end time.
         """
         self.cursor.execute(
             """
@@ -166,21 +176,19 @@ class BacktestDataManager:
             SET end_time = ?
             WHERE run_id = ?
             """,
-            (datetime.now(timezone.utc), run_id),
+            (datetime.now(timezone.utc), self.current_run_id),
         )
         self.conn.commit()
 
 
-    def get_backtest_run(self, run_id: int):
+    def get_backtest_run(self):
         """
         Retrieves a backtest run by its ID.
-        Args:
-            run_id (int): The ID of the backtest run to retrieve.
         Returns:
             dict: A dictionary containing the backtest run details, or None if not found.
         """
 
-        self.cursor.execute("SELECT * FROM backtest_run WHERE run_id = ?", (run_id,))
+        self.cursor.execute("SELECT * FROM backtest_run WHERE run_id = ?", (self.current_run_id,))
         row = self.cursor.fetchone()
         
         if row:
@@ -190,12 +198,11 @@ class BacktestDataManager:
         return None
 
 
-    def insert_signal(self, run_id: int, signal: Signal) -> int:
+    def insert_signal(self, signal: Signal) -> int:
         """
         Inserts a new signal into the database and assigns its ID.
         This method does not commit changes, the caller must handle committing.
         Args:
-            run_id (int): The ID of the backtest run.
             signal (Signal): The Signal object to insert.
         Returns:
             int: The ID of the newly created signal.
@@ -218,7 +225,7 @@ class BacktestDataManager:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                run_id,
+                self.current_run_id,
                 signal.stock,
                 signal.direction.value,
                 date_value,
@@ -232,12 +239,12 @@ class BacktestDataManager:
         signal.signal_id = cur.lastrowid
         return signal.signal_id
 
-    def insert_open_position(self, run_id: int, position: OpenPosition) -> int:
+
+    def insert_open_position(self, position: OpenPosition) -> int:
         """
         Inserts a new open position into the database and assigns its ID.
         This method does not commit changes, the caller must handle committing.
         Args:
-            run_id (int): The ID of the backtest run.
             position (OpenPosition): The OpenPosition object to insert.
         Returns:
             int: The ID of the newly created open position.
@@ -260,7 +267,7 @@ class BacktestDataManager:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                run_id,
+                self.current_run_id,
                 position.stock,
                 position.direction.value,
                 date_value,
@@ -275,13 +282,12 @@ class BacktestDataManager:
         return position.open_position_id
 
 
-    def _insert_trade(self, run_id: int, trade: Trade) -> int:
+    def _insert_trade(self, trade: Trade) -> int:
         """
         Inserts a new trade into the database and assigns its ID.
         This method is intended for internal use when closing positions, as it does not handle deleting the open position or committing the transaction.
         This method does not commit changes, the caller must handle committing.
         Args:
-            run_id (int): The ID of the backtest run.
             trade (Trade): The Trade object to insert.
         Returns:
             int: The ID of the newly created trade.
@@ -311,7 +317,7 @@ class BacktestDataManager:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                run_id,
+                self.current_run_id,
                 trade.stock,
                 trade.direction.value,
                 trade.quantity_type.value,
@@ -332,23 +338,23 @@ class BacktestDataManager:
         return trade.trade_id
     
 
-    def close_open_position(self, run_id: int, position: OpenPosition, trade: Trade):
+    def close_open_position(self, open_position_id: int, trade: Trade):
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
+        This method handles the entire transaction, including committing changes. If any part of the process fails, it will roll back to maintain data integrity.
         Args:
-            run_id (int): The ID of the backtest run.
-            position (OpenPosition): The OpenPosition object to close.
+            open_position_id (int): The ID of the open position to close.
             trade (Trade): The Trade object representing the closed trade.
         Returns:
             int: The ID of the newly created trade.
         """
 
         try:
-            trade_id = self._insert_trade(run_id, trade)
+            trade_id = self._insert_trade(trade)
             
             self.cursor.execute(
                 "DELETE FROM open_position WHERE open_position_id = ?", 
-                (position.open_position_id,)
+                (open_position_id,)
             )
             
             self.conn.commit()
@@ -360,16 +366,28 @@ class BacktestDataManager:
             raise e
 
 
-    def get_signals_for_run(self, run_id: int):
+    def get_signals_for_run(self, run_id: int, start_date: datetime | None = None, end_date: datetime | None = None):
         """
-        Retrieves all signals for a given backtest run.
+        Retrieves all signals for a given backtest run within the specified date range.
+        If no date range is provided, all signals for the run will be returned.
         Args:
             run_id (int): The ID of the backtest run.
         Returns:
             list: A list of Signal objects associated with the run.
         """
 
-        self.cursor.execute("SELECT * FROM signal WHERE run_id = ?", (run_id,))
+        query = "SELECT * FROM signal WHERE run_id = ?"
+        params = [run_id]
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+
+        self.cursor.execute(query, tuple(params))
         rows = self.cursor.fetchall()
         signals = []
         for row in rows:
@@ -417,16 +435,29 @@ class BacktestDataManager:
             positions.append(position)
         return positions
     
-    def get_trades_for_run(self, run_id: int):
+
+    def get_trades_for_run(self, run_id: int, start_date: datetime | None = None, end_date: datetime | None = None):
         """
-        Retrieves all trades for a given backtest run.
+        Retrieves all trades for a given backtest run within the specified date range.
+        If no date range is provided, all trades for the run will be returned.
         Args:
             run_id (int): The ID of the backtest run.
         Returns:
             list: A list of Trade objects associated with the run.
         """
 
-        self.cursor.execute("SELECT * FROM trade WHERE run_id = ?", (run_id,))
+        query = "SELECT * FROM trade WHERE run_id = ?"
+        params = [run_id]
+
+        if start_date:
+            query += " AND exit_date >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND exit_date <= ?"
+            params.append(end_date)
+
+        self.cursor.execute(query, tuple(params))
         rows = self.cursor.fetchall()
         trades = []
         for row in rows:
@@ -450,3 +481,5 @@ class BacktestDataManager:
             )
             trades.append(trade)
         return trades
+
+        
