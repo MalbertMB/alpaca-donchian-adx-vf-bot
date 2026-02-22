@@ -1,1 +1,1 @@
-from live_trader_db_impl import LiveTraderDataBaseManager
+from .live_trader_db_impl import LiveTraderDataBaseManager

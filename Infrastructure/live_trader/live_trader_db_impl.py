@@ -28,9 +28,10 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Args:
             db_path (str): Path to the SQLite database file.
         """
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA foreign_keys = ON;") 
+        self.conn.execute("PRAGMA foreign_keys = ON;")
+        self.conn.execute("PRAGMA journal_mode=WAL;")
         self.cursor = self.conn.cursor()
         self._create_tables()
 
@@ -71,7 +72,7 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
             quantity_type TEXT NOT NULL,
             quantity REAL,
             entry_signal_id INTEGER,
-            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id)
+            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS trade (
@@ -89,9 +90,14 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
             net_result REAL,
             entry_signal_id INTEGER,
             exit_signal_id INTEGER,
-            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id),
-            FOREIGN KEY(exit_signal_id) REFERENCES signal(signal_id)
+            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE,
+            FOREIGN KEY(exit_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE
         );
+
+        CREATE INDEX IF NOT EXISTS idx_signal_date ON signal(date);
+        CREATE INDEX IF NOT EXISTS idx_open_position_date ON open_position(date);
+        CREATE INDEX IF NOT EXISTS idx_trade_entry_date ON trade(entry_date);
+        CREATE INDEX IF NOT EXISTS idx_trade_exit_date ON trade(exit_date);
         """
         self.cursor.executescript(schema)
         self.conn.commit()
@@ -228,28 +234,37 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         return trade.trade_id
     
 
+    
     def close_open_position(self, open_position_id: int, trade: Trade):
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
-        This method handles the entire transaction, including committing changes. If any part of the process fails, it will roll back to maintain data integrity.
+        This method handles the entire transaction, including committing changes.
+        If the open_position_id does not exist, it will roll back to maintain data integrity.
         Args:
             open_position_id (int): The ID of the open position to close.
             trade (Trade): The Trade object representing the closed trade.
         Returns:
-            int: The ID of the newly created trade.    
+            int: The ID of the newly created trade.
         """
+
         try:
             trade_id = self._insert_trade(trade)
+            
             self.cursor.execute(
                 "DELETE FROM open_position WHERE open_position_id = ?", 
                 (open_position_id,)
             )
+
+            if self.cursor.rowcount == 0:
+                raise ValueError(f"Open position with ID {open_position_id} does not exist.")
+            
             self.conn.commit()
             return trade_id
+
         except Exception as e:
-            self.conn.rollback()
+            self.conn.rollback()  # Undo the trade insert if delete fails
             print(f"Error closing position: {e}")
-            raise
+            raise e
 
 
     def get_open_positions(self) -> list[OpenPosition]:

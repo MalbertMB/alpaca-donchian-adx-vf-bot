@@ -74,7 +74,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             price REAL,
             confidence REAL,
             reason TEXT,
-            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id)
+            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS open_position (
@@ -87,8 +87,8 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             quantity_type TEXT NOT NULL,
             quantity REAL,
             entry_signal_id INTEGER,
-            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id),
-            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id)
+            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id) ON DELETE CASCADE,
+            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS trade (
@@ -107,15 +107,16 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             net_result REAL,
             entry_signal_id INTEGER,
             exit_signal_id INTEGER,
-            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id),
-            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id),
-            FOREIGN KEY(exit_signal_id) REFERENCES signal(signal_id)
+            FOREIGN KEY(run_id) REFERENCES backtest_run(run_id) ON DELETE CASCADE,
+            FOREIGN KEY(entry_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE,
+            FOREIGN KEY(exit_signal_id) REFERENCES signal(signal_id) ON DELETE CASCADE
         );
 
-        CREATE INDEX IF NOT EXISTS idx_signal_run ON signal(run_id);
-        CREATE INDEX IF NOT EXISTS idx_position_run ON open_position(run_id);
-        CREATE INDEX IF NOT EXISTS idx_trade_run ON trade(run_id);
+        CREATE INDEX IF NOT EXISTS idx_signal_run ON signal(run_id, date);
+        CREATE INDEX IF NOT EXISTS idx_position_run ON open_position(run_id, date);
+        CREATE INDEX IF NOT EXISTS idx_trade_run ON trade(run_id, entry_date);
         CREATE INDEX IF NOT EXISTS idx_trade_entry_sig ON trade(entry_signal_id);
+        CREATE INDEX IF NOT EXISTS idx_trade_exit_sig ON trade(exit_signal_id);
         """
         self.cursor.executescript(schema)
         self.conn.commit()
@@ -341,7 +342,8 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
     def close_open_position(self, open_position_id: int, trade: Trade):
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
-        This method handles the entire transaction, including committing changes. If any part of the process fails, it will roll back to maintain data integrity.
+        This method handles the entire transaction, including committing changes.
+        If the open_position_id does not exist, it will roll back to maintain data integrity.
         Args:
             open_position_id (int): The ID of the open position to close.
             trade (Trade): The Trade object representing the closed trade.
@@ -356,6 +358,9 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
                 "DELETE FROM open_position WHERE open_position_id = ?", 
                 (open_position_id,)
             )
+
+            if self.cursor.rowcount == 0:
+                raise ValueError(f"Open position with ID {open_position_id} does not exist.")
             
             self.conn.commit()
             return trade_id
@@ -366,18 +371,18 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             raise e
 
 
-    def get_signals_for_run(self, run_id: int, start_date: datetime | None = None, end_date: datetime | None = None):
+    def get_signals(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None):
         """
         Retrieves all signals for a given backtest run within the specified date range.
         If no date range is provided, all signals for the run will be returned.
         Args:
-            run_id (int): The ID of the backtest run.
+            run_id (int): The ID of the backtest run.run_id
         Returns:
             list: A list of Signal objects associated with the run.
         """
 
         query = "SELECT * FROM signal WHERE run_id = ?"
-        params = [run_id]
+        params = [self.current_run_id]
 
         if start_date:
             query += " AND date >= ?"
@@ -407,7 +412,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         return signals
     
 
-    def get_open_positions_for_run(self, run_id: int):
+    def get_open_positions(self):
         """
         Retrieves all open positions for a given backtest run.
         Args:
@@ -416,7 +421,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             list: A list of OpenPosition objects associated with the run.
         """
 
-        self.cursor.execute("SELECT * FROM open_position WHERE run_id = ?", (run_id,))
+        self.cursor.execute("SELECT * FROM open_position WHERE run_id = ?", (self.current_run_id))
         rows = self.cursor.fetchall()
         positions = []
         for row in rows:
@@ -436,7 +441,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         return positions
     
 
-    def get_trades_for_run(self, run_id: int, start_date: datetime | None = None, end_date: datetime | None = None):
+    def get_trades(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None):
         """
         Retrieves all trades for a given backtest run within the specified date range.
         If no date range is provided, all trades for the run will be returned.
@@ -447,7 +452,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         """
 
         query = "SELECT * FROM trade WHERE run_id = ?"
-        params = [run_id]
+        params = [self.current_run_id]
 
         if start_date:
             query += " AND exit_date >= ?"
@@ -481,5 +486,15 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             )
             trades.append(trade)
         return trades
+    
+
+    def set_active_run(self, run_id: int):
+        """
+        Sets the internal context to a specific historical backtest run.
+        Subsequent calls to retrieval methods (like get_signals) will fetch data for this run.
+        Args:
+            run_id (int): The ID of the backtest run to load.
+        """
+        self.current_run_id = run_id
 
         

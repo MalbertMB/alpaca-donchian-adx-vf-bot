@@ -13,151 +13,143 @@ elif config.MODE == "live":
     ...
 """
 
-
-from Infrastructure import BacktestDataBaseManager
+from Infrastructure import BacktestDataBaseManager, LiveTraderDataBaseManager
 from datetime import datetime, timedelta
 import pandas as pd
 from Domain import Signal, OpenPosition, Trade, Direction, QuantityType, SignalType
 
-""" Example usage of Backtester database"""
-# 1. Initialize Database
-# Ensure the directory exists or adjust path as needed
-db = BacktestDataBaseManager(db_path="Infrastructure/backtester/backtester.db")
+import threading
+from Infrastructure import BacktestDataBaseManager, LiveTraderDataBaseManager
+from datetime import datetime, timezone
+import pandas as pd
+from Domain import Signal, OpenPosition, Trade, Direction, QuantityType, SignalType
+import sqlite3
 
-print("--- Starting Database Test ---")
+def run_updated_stress_test(backtest_db_path: str, live_db_path: str):
+    print("🚀 Starting Advanced Database Stress Tests...\n")
+    
+    # --- Test 1: Context Manager (__exit__ Signature Fix) ---
+    print("Test 1: Testing Context Manager (__enter__ and __exit__)...")
+    try:
+        with LiveTraderDataBaseManager(db_path=live_db_path) as live_db:
+            # If __exit__ has the wrong signature, this block will crash when exiting
+            pass
+        print("✅ PASS: Context manager exited cleanly without crashing.")
+    except Exception as e:
+        print(f"❌ FAIL: Context manager crashed. Error: {e}")
 
-# 2. Create a Backtest Run
-# We use dummy dates for the data range
-run_id = db.create_backtest_run(
-    strategy_name="TrendFollower_Test",
-    strategy_version="1.0.1",
-    parameters={"window": 20, "stop_loss": 0.05},
-    data_start=datetime(2023, 1, 1),
-    data_end=datetime(2023, 6, 1)
-)
-print(f"1. Created Backtest Run (ID: {run_id})")
+    # Re-initialize for the rest of the tests
+    back_db = BacktestDataBaseManager(db_path=backtest_db_path)
+    live_db = LiveTraderDataBaseManager(db_path=live_db_path)
 
-# 3. Create an ENTRY Signal
-entry_date = pd.Timestamp("2023-01-05 10:00:00")
-entry_signal = Signal(
-    stock="AAPL",
-    signal_type=SignalType.ENTRY,
-    direction=Direction.LONG,
-    date=entry_date,
-    price=150.0,
-    confidence=0.85,
-    reason="MA Crossover"
-)
+    # --- Test 2: Thread Safety & WAL Mode (Live DB) ---
+    print("\nTest 2: Testing Thread Safety (check_same_thread) & WAL Mode...")
+    try:
+        # Check WAL mode
+        live_db.cursor.execute("PRAGMA journal_mode;")
+        journal_mode = live_db.cursor.fetchone()[0]
+        if journal_mode.lower() == 'wal':
+            print("✅ PASS: Live DB is correctly using WAL journal mode.")
+        else:
+            print(f"❌ FAIL: Expected 'wal', got '{journal_mode}'.")
 
-# Insert and Commit
-db.insert_signal(run_id, entry_signal)
-db.commit() # Remember to commit manual insertions!
-print(f"2. Inserted Entry Signal (ID: {entry_signal.signal_id})")
+        # Test cross-thread writing
+        def thread_worker():
+            live_db.cursor.execute("SELECT 1")
+            
+        t = threading.Thread(target=thread_worker)
+        t.start()
+        t.join()
+        print("✅ PASS: check_same_thread=False is working. No cross-thread exceptions.")
+    except Exception as e:
+        print(f"❌ FAIL: Thread safety test failed. Error: {e}")
 
-# 4. Open a Position based on that signal
-position = OpenPosition(
-    stock="AAPL",
-    direction=Direction.LONG,
-    date=entry_date,
-    entry_price=150.0,
-    quantity_type=QuantityType.SHARES,
-    quantity=10.0,
-    entry_signal_id=entry_signal.signal_id
-)
+    # --- Test 3: State Management & LSP (set_active_run) ---
+    print("\nTest 3: Testing State Management (set_active_run) and LSP Interface...")
+    
+    # Create Run A
+    run_a_id = back_db.create_backtest_run(
+        strategy_name="Strat_A", strategy_version="1.0", parameters={},
+        data_start=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        data_end=datetime(2021, 1, 1, tzinfo=timezone.utc)
+    )
+    # Insert a signal into Run A
+    sig_a = Signal("AAPL", SignalType.ENTRY, Direction.LONG, pd.Timestamp.now(), 150.0, 0.9, "Run A")
+    back_db.insert_signal(sig_a)
+    back_db.commit()
 
-db.insert_open_position(run_id, position)
-db.commit()
-print(f"3. Opened Position (ID: {position.open_position_id})")
+    # Create Run B (this automatically shifts the internal state to Run B)
+    run_b_id = back_db.create_backtest_run(
+        strategy_name="Strat_B", strategy_version="2.0", parameters={},
+        data_start=datetime(2021, 1, 1, tzinfo=timezone.utc),
+        data_end=datetime(2022, 1, 1, tzinfo=timezone.utc)
+    )
+    # Insert a signal into Run B
+    sig_b = Signal("MSFT", SignalType.EXIT, Direction.SHORT, pd.Timestamp.now(), 300.0, 0.8, "Run B")
+    back_db.insert_signal(sig_b)
+    back_db.commit()
 
-# Verify position exists
-open_positions = db.get_open_positions_for_run(run_id)
-print(f"   -> Current Open Positions in DB: {len(open_positions)}")
+    # Now, test the LSP interface and state switching!
+    back_db.set_active_run(run_a_id)
+    signals_a = back_db.get_signals() # NO run_id passed! Perfectly matches interface.
+    
+    if len(signals_a) == 1 and signals_a[0].stock == "AAPL":
+        print("✅ PASS: set_active_run successfully switched context and retrieved Run A data.")
+    else:
+        print("❌ FAIL: Did not retrieve the correct isolated data for Run A.")
 
-# 5. Create an EXIT Signal
-exit_date = pd.Timestamp("2023-01-10 14:00:00")
-exit_signal = Signal(
-    stock="AAPL",
-    signal_type=SignalType.EXIT,
-    direction=Direction.SHORT, # Closing a LONG
-    date=exit_date,
-    price=160.0,
-    confidence=0.90,
-    reason="Target Hit"
-)
+    # --- Test 4: The Ghost Trade (Rowcount / Rollback Fix) ---
+    print("\nTest 4: Testing 'Ghost Trade' Rollback on Invalid Position ID...")
+    dummy_trade = Trade("TSLA", Direction.LONG, QuantityType.SHARES, 10, 100, 150, pd.Timestamp.now(), pd.Timestamp.now(), 500, 1.5, 498.5, sig_a.signal_id, sig_b.signal_id)
+    
+    invalid_position_id = 9999999 
 
-db.insert_signal(run_id, exit_signal)
-db.commit()
-print(f"4. Inserted Exit Signal (ID: {exit_signal.signal_id})")
+    try:
+        live_db.close_open_position(open_position_id=invalid_position_id, trade=dummy_trade)
+        print("❌ FAIL: No error was raised. The Ghost Trade bug is still present.")
+    except ValueError as ve:
+        # Check if the trade was actually rolled back
+        live_db.cursor.execute("SELECT COUNT(*) FROM trade WHERE stock='TSLA' AND gross_result=500")
+        trade_count = live_db.cursor.fetchone()[0]
+        if trade_count == 0:
+            print("✅ PASS: Caught invalid close attempt and successfully rolled back the trade insertion!")
+        else:
+            print("❌ FAIL: Error was raised, but the trade was STILL inserted (Rollback failed).")
+    except Exception as e:
+        print(f"⚠️ WARNING: Unexpected error type caught: {type(e).__name__}: {e}")
 
-# 6. Close the Position (Create Trade)
-# We create the Trade object that represents the result
-trade_result = Trade(
-    stock="AAPL",
-    direction=Direction.LONG,
-    quantity_type=QuantityType.SHARES,
-    quantity=10.0,
-    entry_price=150.0,
-    exit_price=160.0,
-    entry_date=entry_date,
-    exit_date=exit_date,
-    gross_result=100.0, # (160-150)*10
-    commission=2.0,
-    net_result=98.0,
-    entry_signal_id=entry_signal.signal_id,
-    exit_signal_id=exit_signal.signal_id
-)
+    # --- Test 5: Foreign Key Cascade Deletion ---
+    print("\nTest 5: Testing ON DELETE CASCADE (Foreign Keys)...")
+    
+    # We are still in the context of Run A. Let's add an open position to it.
+    pos_a = OpenPosition("NVDA", Direction.LONG, pd.Timestamp.now(), 400.0, QuantityType.SHARES, 10.0, sig_a.signal_id, None)
+    back_db.insert_open_position(pos_a)
+    back_db.commit()
 
-# This method handles inserting the trade AND deleting the open position
-db.close_open_position(run_id, position.open_position_id, trade_result)
-print(f"5. Closed Position & Recorded Trade (Trade ID: {trade_result.trade_id})")
+    # Delete Run A via raw SQL to trigger the cascade
+    back_db.cursor.execute("DELETE FROM backtest_run WHERE run_id = ?", (run_a_id,))
+    back_db.commit()
 
-# 7. Final Verification
-print("\n--- Final Results ---")
-final_positions = db.get_open_positions_for_run(run_id)
-final_trades = db.get_trades_for_run(run_id)
+    # Verify that the open position and signal were wiped out automatically
+    back_db.cursor.execute("SELECT COUNT(*) FROM open_position WHERE run_id = ?", (run_a_id,))
+    pos_count = back_db.cursor.fetchone()[0]
+    back_db.cursor.execute("SELECT COUNT(*) FROM signal WHERE run_id = ?", (run_a_id,))
+    sig_count = back_db.cursor.fetchone()[0]
 
-print(f"Open Positions (Should be 0): {len(final_positions)}")
-print(f"Recorded Trades (Should be 1): {len(final_trades)}")
+    if pos_count == 0 and sig_count == 0:
+        print("✅ PASS: ON DELETE CASCADE successfully wiped child records when the parent run was deleted.")
+    else:
+        print(f"❌ FAIL: Cascade failed. Found {pos_count} positions and {sig_count} signals remaining.")
 
-if len(final_trades) > 0:
-    t = final_trades[0]
-    print(f"Trade Details: {t.stock} | Net PnL: {t.net_result}")
+    # Cleanup
+    back_db.close()
+    live_db.close()
+    print("\nStress testing complete. Databases safely closed.")
 
-# Close the run
-db.close_backtest_run(run_id)
-print("6. Run Closed.")
-
-
-
-""" Example usage of Backtester """
-# start_date = datetime(2023, 1, 1)
-# end_date = datetime(2023, 12, 31)
-# strategy = VolatilityBreakoutStrategy()
-# backtester = Backtester(manager, strategy)
-# backtester.run(group="Dow Jones", start_date=start_date, end_date=end_date)
-
-# manager.close_trade_by_symbol("NVDA")
-
-""" Example usage of DataManager to open a trade using stock quantity"""
-# manager.open_trade_qty("AAPL", 10, "buy")
-
-""" Example usage of DataManager to open a trade using notional value"""
-# manager.open_position_notional("NVDA", 1000, "buy")
-
-
-""" Example usage of DataManager to retrieve open orders """
-# open_positions = manager.get_positions()
-# for position in open_positions:
-#     print(f"Open Position: {position['symbol']} - Qty: {position['qty']} - Side: {position['side']}")
-#     manager.close_position_by_symbol(position['symbol'])
-
-""" Example usage of DataManager to update and retrieve OHLCV data """
-# start_date = datetime(2023, 11, 1)
-# end_date = datetime(2023, 12, 10)
-# symbol = "AAPL"
-# # # Update OHLCV data for the specified symbol and date range
-# # manager.update_ohlcv_data(symbol, start_date, end_date)
-# # # Retrieve OHLCV data for the specified symbol and date range
-# ohlcv_data = manager.get_ohlcv_data(symbol, start_date, end_date)
-# for data in ohlcv_data:
-#     print(f"Date: {data['date']}, Open: {data['open']}, High: {data['high']}, Low: {data['low']}, Close: {data['close']}, Volume: {data['volume']}")
+# --- Execute the Test ---
+if __name__ == "__main__":
+    # Use temporary file paths for testing so you can easily delete them later
+    test_back_db = "Infrastructure/backtester/test_backtester.db"
+    test_live_db = "Infrastructure/live_trader/test_live_trader.db"
+    
+    run_updated_stress_test(test_back_db, test_live_db)
