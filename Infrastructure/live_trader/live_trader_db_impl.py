@@ -8,10 +8,11 @@ Description:
 
 Author: Albert Marín Blasco
 Date Created: 2025-06-25
-Last Modified: 2026-02-19
+Last Modified: 2026-02-22
 """
 
 import sqlite3
+import threading
 import pandas as pd
 
 from ..interfaces import TradingDataBaseInterface
@@ -28,29 +29,32 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Args:
             db_path (str): Path to the SQLite database file.
         """
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.conn.execute("PRAGMA journal_mode=WAL;")
-        self.cursor = self.conn.cursor()
+        self.db_lock = threading.Lock()
         self._create_tables()
 
 
-    def close(self):
-        """
-        Closes the database connection. Should be called when the database is no longer needed to free up resources.
-        """
+    def close(self) -> None:
+        """Closes the database connection. Should be called when the database is no longer needed to free up resources."""
         if self.conn:
             self.conn.close()
 
 
-    def commit(self):
+    def commit(self) -> None:
         """Manual commit to allow batching during backtests."""
         self.conn.commit()
 
 
-    def _create_tables(self):
-        """Initialize database tables if they do not exist."""
+    def _create_tables(self) -> None:
+        """
+        Initialize database tables if they do not exist.
+        This method defines the schema for signals, open positions, and trades, along with indexes to optimize query performance.
+        """
+
         schema = """
         CREATE TABLE IF NOT EXISTS signal (
             signal_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,8 +103,11 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         CREATE INDEX IF NOT EXISTS idx_trade_entry_date ON trade(entry_date);
         CREATE INDEX IF NOT EXISTS idx_trade_exit_date ON trade(exit_date);
         """
-        self.cursor.executescript(schema)
-        self.conn.commit()
+
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executescript(schema)
+            self.conn.commit()
 
 
     def insert_signal(self, signal: Signal) -> int:
@@ -112,34 +119,37 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             int: The generated signal_id for the inserted signal.
         """
+
         date_value = signal.date.to_pydatetime() if isinstance(signal.date, pd.Timestamp) else signal.date
 
-        cur = self.cursor.execute(
-            """
-            INSERT INTO signal (
-                stock,
-                direction,
-                date,
-                signal_type,
-                price,
-                confidence,
-                reason
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO signal (
+                    stock,
+                    direction,
+                    date,
+                    signal_type,
+                    price,
+                    confidence,
+                    reason
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    signal.stock,
+                    signal.direction.value,
+                    date_value,
+                    signal.signal_type.value,
+                    signal.price,
+                    signal.confidence,
+                    signal.reason,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                signal.stock,
-                signal.direction.value,
-                date_value,
-                signal.signal_type.value,
-                signal.price,
-                signal.confidence,
-                signal.reason,
-            ),
-        )
 
-        signal.signal_id = cur.lastrowid
-        return signal.signal_id
+            signal.signal_id = cur.lastrowid
+            return signal.signal_id
     
 
     def insert_open_position(self, open_position: OpenPosition) -> int:
@@ -151,37 +161,40 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             int: The generated open_position_id for the inserted open position.
         """
+
         date_value = open_position.date.to_pydatetime() if isinstance(open_position.date, pd.Timestamp) else open_position.date
 
-        cur = self.cursor.execute(
-            """
-            INSERT INTO open_position (
-                stock,
-                direction,
-                date,
-                entry_price,
-                quantity_type,
-                quantity,
-                entry_signal_id
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO open_position (
+                    stock,
+                    direction,
+                    date,
+                    entry_price,
+                    quantity_type,
+                    quantity,
+                    entry_signal_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    open_position.stock,
+                    open_position.direction.value,
+                    date_value,
+                    open_position.entry_price,
+                    open_position.quantity_type.value,
+                    open_position.quantity,
+                    open_position.entry_signal_id
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                open_position.stock,
-                open_position.direction.value,
-                date_value,
-                open_position.entry_price,
-                open_position.quantity_type.value,
-                open_position.quantity,
-                open_position.entry_signal_id
-            ),
-        )
 
-        open_position.open_position_id = cur.lastrowid
-        return open_position.open_position_id
+            open_position.open_position_id = cur.lastrowid
+            return open_position.open_position_id
     
 
-    def _insert_trade(self, trade: Trade) -> int:
+    def _insert_trade(self, trade: Trade, cur: sqlite3.Cursor) -> int:
         """
         Inserts a new trade into the database and assigns its ID.
         This method is intended for internal use when closing positions, as it does not handle deleting the open position or committing the transaction.
@@ -191,10 +204,11 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             int: The ID of the newly created trade.
         """
+
         entry_date_value = trade.entry_date.to_pydatetime() if isinstance(trade.entry_date, pd.Timestamp) else trade.entry_date
         exit_date_value = trade.exit_date.to_pydatetime() if isinstance(trade.exit_date, pd.Timestamp) else trade.exit_date
 
-        cur = self.cursor.execute(
+        cur.execute(
             """
             INSERT INTO trade (
                 stock,
@@ -232,10 +246,9 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
 
         trade.trade_id = cur.lastrowid
         return trade.trade_id
-    
 
     
-    def close_open_position(self, open_position_id: int, trade: Trade):
+    def close_open_position(self, open_position_id: int, trade: Trade) -> int:
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
         This method handles the entire transaction, including committing changes.
@@ -247,24 +260,27 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
             int: The ID of the newly created trade.
         """
 
-        try:
-            trade_id = self._insert_trade(trade)
-            
-            self.cursor.execute(
-                "DELETE FROM open_position WHERE open_position_id = ?", 
-                (open_position_id,)
-            )
+        with self.db_lock:
+            cur = self.conn.cursor()
+    
+            try:
+                trade_id = self._insert_trade(trade, cur)
+                
+                cur.execute(
+                    "DELETE FROM open_position WHERE open_position_id = ?", 
+                    (open_position_id,)
+                )
 
-            if self.cursor.rowcount == 0:
-                raise ValueError(f"Open position with ID {open_position_id} does not exist.")
-            
-            self.conn.commit()
-            return trade_id
+                if cur.rowcount == 0:
+                    raise ValueError(f"Open position with ID {open_position_id} does not exist.")
+                
+                self.conn.commit()
+                return trade_id
 
-        except Exception as e:
-            self.conn.rollback()  # Undo the trade insert if delete fails
-            print(f"Error closing position: {e}")
-            raise e
+            except Exception as e:
+                self.conn.rollback()
+                trade.trade_id = None
+                raise e
 
 
     def get_open_positions(self) -> list[OpenPosition]:
@@ -273,22 +289,25 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             list[OpenPosition]: A list of OpenPosition objects representing the current open positions in the database.
         """
-        self.cursor.execute("SELECT * FROM open_position")
-        rows = self.cursor.fetchall()
-        open_positions = []
-        for row in rows:
-            open_position = OpenPosition(
-                stock=row["stock"],
-                direction=Direction(row["direction"]),
-                date=pd.Timestamp(row["date"]),
-                entry_price=row["entry_price"],
-                quantity_type=QuantityType(row["quantity_type"]),
-                quantity=row["quantity"],
-                entry_signal_id=row["entry_signal_id"],
-                open_position_id=row["open_position_id"]
-            )
-            open_positions.append(open_position)
-        return open_positions
+
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM open_position")
+            rows = cur.fetchall()
+            open_positions = []
+            for row in rows:
+                open_position = OpenPosition(
+                    stock=row["stock"],
+                    direction=Direction(row["direction"]),
+                    date=pd.Timestamp(row["date"]),
+                    entry_price=row["entry_price"],
+                    quantity_type=QuantityType(row["quantity_type"]),
+                    quantity=row["quantity"],
+                    entry_signal_id=row["entry_signal_id"],
+                    open_position_id=row["open_position_id"]
+                )
+                open_positions.append(open_position)
+            return open_positions
     
 
     def get_signals(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None) -> list[Signal]:
@@ -301,6 +320,7 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             list[Signal]: A list of Signal objects representing the signals in the specified date range.
         """
+
         query = "SELECT * FROM signal"
         params = []
         if start_date and end_date:
@@ -313,22 +333,24 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
             query += " WHERE date <= ?"
             params.append(end_date.to_pydatetime())
 
-        self.cursor.execute(query, params)
-        rows = self.cursor.fetchall()
-        signals = []
-        for row in rows:
-            signal = Signal(
-                stock=row["stock"],
-                direction=Direction(row["direction"]),
-                date=pd.Timestamp(row["date"]),
-                signal_type=SignalType(row["signal_type"]),
-                price=row["price"],
-                confidence=row["confidence"],
-                reason=row["reason"],
-                signal_id=row["signal_id"]
-            )
-            signals.append(signal)
-        return signals
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            signals = []
+            for row in rows:
+                signal = Signal(
+                    stock=row["stock"],
+                    direction=Direction(row["direction"]),
+                    date=pd.Timestamp(row["date"]),
+                    signal_type=SignalType(row["signal_type"]),
+                    price=row["price"],
+                    confidence=row["confidence"],
+                    reason=row["reason"],
+                    signal_id=row["signal_id"]
+                )
+                signals.append(signal)
+            return signals
     
 
     def get_trades(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None) -> list[Trade]:
@@ -341,37 +363,40 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         Returns:
             list[Trade]: A list of Trade objects representing the trades in the specified date range.
         """
+
         query = "SELECT * FROM trade"
         params = []
         if start_date and end_date:
-            query += " WHERE entry_date >= ? AND exit_date <= ?"
+            query += " WHERE exit_date >= ? AND exit_date <= ?"
             params.extend([start_date.to_pydatetime(), end_date.to_pydatetime()])
         elif start_date:
-            query += " WHERE entry_date >= ?"
+            query += " WHERE exit_date >= ?"
             params.append(start_date.to_pydatetime())
         elif end_date:
             query += " WHERE exit_date <= ?"
             params.append(end_date.to_pydatetime())
-
-        self.cursor.execute(query, params)
-        rows = self.cursor.fetchall()
-        trades = []
-        for row in rows:
-            trade = Trade(
-                stock=row["stock"],
-                direction=Direction(row["direction"]),
-                quantity_type=QuantityType(row["quantity_type"]),
-                quantity=row["quantity"],
-                entry_price=row["entry_price"],
-                exit_price=row["exit_price"],
-                entry_date=pd.Timestamp(row["entry_date"]),
-                exit_date=pd.Timestamp(row["exit_date"]),
-                gross_result=row["gross_result"],
-                commission=row["commission"],
-                net_result=row["net_result"],
-                entry_signal_id=row["entry_signal_id"],
-                exit_signal_id=row["exit_signal_id"],
-                trade_id=row["trade_id"]
-            )
-            trades.append(trade)
-        return trades
+        
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            trades = []
+            for row in rows:
+                trade = Trade(
+                    stock=row["stock"],
+                    direction=Direction(row["direction"]),
+                    quantity_type=QuantityType(row["quantity_type"]),
+                    quantity=row["quantity"],
+                    entry_price=row["entry_price"],
+                    exit_price=row["exit_price"],
+                    entry_date=pd.Timestamp(row["entry_date"]),
+                    exit_date=pd.Timestamp(row["exit_date"]),
+                    gross_result=row["gross_result"],
+                    commission=row["commission"],
+                    net_result=row["net_result"],
+                    entry_signal_id=row["entry_signal_id"],
+                    exit_signal_id=row["exit_signal_id"],
+                    trade_id=row["trade_id"]
+                )
+                trades.append(trade)
+            return trades

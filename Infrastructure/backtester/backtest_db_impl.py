@@ -8,12 +8,13 @@ Description:
     
 Author: Albert Marín Blasco
 Date Created: 2025-11-25
-Last Modified: 2026-02-19
+Last Modified: 2026-02-22
 """
 
 import sqlite3
 import json
 import pandas as pd
+import threading
 
 from datetime import datetime, timezone
 from ..interfaces import TradingDataBaseInterface
@@ -30,28 +31,33 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         Args:
             db_path (str): Path to the SQLite database file.
         """
-        self.conn = sqlite3.connect(db_path)
+
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON;") 
-        self.cursor = self.conn.cursor()
+        self.conn.execute("PRAGMA journal_mode=WAL;")
+        self.db_lock = threading.Lock()
         self._create_tables()
         self.current_run_id = None
 
-    def close(self):
-        """
-        Closes the database connection. Should be called when the database is no longer needed to free up resources.
-        """
+
+    def close(self) -> None:
+        """Closes the database connection. Should be called when the database is no longer needed to free up resources."""
         if self.conn:
             self.conn.close()
 
 
-    def commit(self):
+    def commit(self) -> None:
         """Manual commit to allow batching during backtests."""
         self.conn.commit()
 
 
-    def _create_tables(self):
-        """Creates the necessary schema if it doesn't exist."""
+    def _create_tables(self) -> None:
+        """
+        Creates the necessary schema if it doesn't exist.
+        This method defines the tables for backtest runs, signals, open positions, and trades, along with appropriate indexes for performance.
+        """
+
         schema = """
         CREATE TABLE IF NOT EXISTS backtest_run (
             run_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,12 +124,14 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         CREATE INDEX IF NOT EXISTS idx_trade_entry_sig ON trade(entry_signal_id);
         CREATE INDEX IF NOT EXISTS idx_trade_exit_sig ON trade(exit_signal_id);
         """
-        self.cursor.executescript(schema)
-        self.conn.commit()
+
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executescript(schema)
+            self.conn.commit()
 
 
-    def create_backtest_run(self, strategy_name: str, strategy_version: str, parameters: dict,
-                            data_start: datetime, data_end: datetime ) -> int:
+    def create_backtest_run(self, strategy_name: str, strategy_version: str, parameters: dict, data_start: datetime, data_end: datetime ) -> int:
         """
         Inserts a new backtest run into the database.
         Args:
@@ -138,65 +146,52 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         
         params_json = json.dumps(parameters) 
 
-        cur = self.cursor.execute(
-            """
-            INSERT INTO backtest_run (
-                strategy_name,
-                strategy_version,
-                parameters,
-                start_time,
-                data_start,
-                data_end
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO backtest_run (
+                    strategy_name,
+                    strategy_version,
+                    parameters,
+                    start_time,
+                    data_start,
+                    data_end
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    strategy_name,
+                    strategy_version,
+                    params_json,
+                    datetime.now(timezone.utc),
+                    data_start,
+                    data_end,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                strategy_name,
-                strategy_version,
-                params_json,
-                datetime.now(timezone.utc),
-                data_start,
-                data_end,
-            ),
-        )
-        self.conn.commit()
+            self.conn.commit()
 
-        # Store the current run ID for use in subsequent operations
-        self.current_run_id = cur.lastrowid
-        return self.current_run_id
+            self.current_run_id = cur.lastrowid
+            return self.current_run_id
     
 
-    def close_backtest_run(self):
+    def close_backtest_run(self) -> None:
         """
         Updates the end_time of a backtest run to mark its completion.
         This method should be called when a backtest run is finished to record the end time.
         """
-        self.cursor.execute(
-            """
-            UPDATE backtest_run
-            SET end_time = ?
-            WHERE run_id = ?
-            """,
-            (datetime.now(timezone.utc), self.current_run_id),
-        )
-        self.conn.commit()
 
-
-    def get_backtest_run(self):
-        """
-        Retrieves a backtest run by its ID.
-        Returns:
-            dict: A dictionary containing the backtest run details, or None if not found.
-        """
-
-        self.cursor.execute("SELECT * FROM backtest_run WHERE run_id = ?", (self.current_run_id,))
-        row = self.cursor.fetchone()
-        
-        if row:
-            data = dict(row)
-            data['parameters'] = json.loads(data['parameters']) 
-            return data
-        return None
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                UPDATE backtest_run
+                SET end_time = ?
+                WHERE run_id = ?
+                """,
+                (datetime.now(timezone.utc), self.current_run_id),
+            )
+            self.conn.commit()
 
 
     def insert_signal(self, signal: Signal) -> int:
@@ -210,80 +205,85 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         """
 
         date_value = signal.date.to_pydatetime() if isinstance(signal.date, pd.Timestamp) else signal.date
-
-        cur = self.cursor.execute(
-            """
-            INSERT INTO signal (
-                run_id,
-                stock,
-                direction,
-                date,
-                signal_type,
-                price,
-                confidence,
-                reason
+        
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO signal (
+                    run_id,
+                    stock,
+                    direction,
+                    date,
+                    signal_type,
+                    price,
+                    confidence,
+                    reason
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    self.current_run_id,
+                    signal.stock,
+                    signal.direction.value,
+                    date_value,
+                    signal.signal_type.value,
+                    signal.price,
+                    signal.confidence,
+                    signal.reason,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                self.current_run_id,
-                signal.stock,
-                signal.direction.value,
-                date_value,
-                signal.signal_type.value,
-                signal.price,
-                signal.confidence,
-                signal.reason,
-            ),
-        )
 
-        signal.signal_id = cur.lastrowid
-        return signal.signal_id
+            signal.signal_id = cur.lastrowid
+            return signal.signal_id
 
 
-    def insert_open_position(self, position: OpenPosition) -> int:
+    def insert_open_position(self, open_position: OpenPosition) -> int:
         """
         Inserts a new open position into the database and assigns its ID.
         This method does not commit changes, the caller must handle committing.
         Args:
-            position (OpenPosition): The OpenPosition object to insert.
+            open_position (OpenPosition): The OpenPosition object to insert.
         Returns:
             int: The ID of the newly created open position.
         """
 
-        date_value = position.date.to_pydatetime() if isinstance(position.date, pd.Timestamp) else position.date
+        date_value = open_position.date.to_pydatetime() if isinstance(open_position.date, pd.Timestamp) else open_position.date
 
-        cur = self.cursor.execute(
-            """
-            INSERT INTO open_position (
-                run_id,
-                stock,
-                direction,
-                date,
-                entry_price,
-                quantity_type,
-                quantity,
-                entry_signal_id
+        with self.db_lock:
+            cur = self.conn.cursor()
+
+            cur.execute(
+                """
+                INSERT INTO open_position (
+                    run_id,
+                    stock,
+                    direction,
+                    date,
+                    entry_price,
+                    quantity_type,
+                    quantity,
+                    entry_signal_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    self.current_run_id,
+                    open_position.stock,
+                    open_position.direction.value,
+                    date_value,
+                    open_position.entry_price,
+                    open_position.quantity_type.value,
+                    open_position.quantity,
+                    open_position.entry_signal_id,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                self.current_run_id,
-                position.stock,
-                position.direction.value,
-                date_value,
-                position.entry_price,
-                position.quantity_type.value,
-                position.quantity,
-                position.entry_signal_id,
-            ),
-        )
-        
-        position.open_position_id = cur.lastrowid
-        return position.open_position_id
+            
+            open_position.open_position_id = cur.lastrowid
+            return open_position.open_position_id
 
 
-    def _insert_trade(self, trade: Trade) -> int:
+    def _insert_trade(self, trade: Trade, cur: sqlite3.Cursor) -> int:
         """
         Inserts a new trade into the database and assigns its ID.
         This method is intended for internal use when closing positions, as it does not handle deleting the open position or committing the transaction.
@@ -297,7 +297,8 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         entry_date_value = trade.entry_date.to_pydatetime() if isinstance(trade.entry_date, pd.Timestamp) else trade.entry_date
         exit_date_value = trade.exit_date.to_pydatetime() if isinstance(trade.exit_date, pd.Timestamp) else trade.exit_date
 
-        cur = self.cursor.execute(
+    
+        cur.execute(
             """
             INSERT INTO trade (
                 run_id,
@@ -339,7 +340,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         return trade.trade_id
     
 
-    def close_open_position(self, open_position_id: int, trade: Trade):
+    def close_open_position(self, open_position_id: int, trade: Trade) -> int:
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
         This method handles the entire transaction, including committing changes.
@@ -351,32 +352,55 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             int: The ID of the newly created trade.
         """
 
-        try:
-            trade_id = self._insert_trade(trade)
+        with self.db_lock:
+            cur = self.conn.cursor()
+
+            try:
+                trade_id = self._insert_trade(trade, cur)
+                
+                cur.execute(
+                    "DELETE FROM open_position WHERE open_position_id = ?", 
+                    (open_position_id,)
+                )
+
+                if cur.rowcount == 0:
+                    raise ValueError(f"Open position with ID {open_position_id} does not exist.")
+                
+                self.conn.commit()
+                return trade_id
+
+            except Exception as e:
+                self.conn.rollback()
+                trade.trade_id = None
+                raise e
+
+
+    def get_backtest_run(self) -> dict | None:
+        """
+        Retrieves a backtest run by its ID.
+        Returns:
+            dict: A dictionary containing the backtest run details, or None if not found.
+        """
+
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM backtest_run WHERE run_id = ?", (self.current_run_id,))
+            row = cur.fetchone()
             
-            self.cursor.execute(
-                "DELETE FROM open_position WHERE open_position_id = ?", 
-                (open_position_id,)
-            )
-
-            if self.cursor.rowcount == 0:
-                raise ValueError(f"Open position with ID {open_position_id} does not exist.")
-            
-            self.conn.commit()
-            return trade_id
-
-        except Exception as e:
-            self.conn.rollback()  # Undo the trade insert if delete fails
-            print(f"Error closing position: {e}")
-            raise e
+            if row:
+                data = dict(row)
+                data['parameters'] = json.loads(data['parameters']) 
+                return data
+            return None
 
 
-    def get_signals(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None):
+    def get_signals(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None) -> list[Signal]:
         """
         Retrieves all signals for a given backtest run within the specified date range.
         If no date range is provided, all signals for the run will be returned.
         Args:
-            run_id (int): The ID of the backtest run.run_id
+            start_date (pd.Timestamp | None): The start date of the range to retrieve signals for.
+            end_date (pd.Timestamp | None): The end date of the range to retrieve signals for.
         Returns:
             list: A list of Signal objects associated with the run.
         """
@@ -386,67 +410,70 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
 
         if start_date:
             query += " AND date >= ?"
-            params.append(start_date)
+            params.append(start_date.to_pydatetime())
 
         if end_date:
             query += " AND date <= ?"
-            params.append(end_date)
+            params.append(end_date.to_pydatetime())
 
-        self.cursor.execute(query, tuple(params))
-        rows = self.cursor.fetchall()
-        signals = []
-        for row in rows:
-            data = dict(row)
-            signal = Signal(
-                stock=data['stock'],
-                signal_type=SignalType(data['signal_type']),
-                direction=Direction(data['direction']),
-                date=pd.Timestamp(data['date']),
-                price=data['price'],
-                confidence=data['confidence'],
-                reason=data['reason'],
-                signal_id=data['signal_id'],
-                run_id=data['run_id']
-            )
-            signals.append(signal)
-        return signals
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(query, tuple(params))
+            rows = cur.fetchall()
+            signals = []
+            for row in rows:
+                data = dict(row)
+                signal = Signal(
+                    stock=data['stock'],
+                    signal_type=SignalType(data['signal_type']),
+                    direction=Direction(data['direction']),
+                    date=pd.Timestamp(data['date']),
+                    price=data['price'],
+                    confidence=data['confidence'],
+                    reason=data['reason'],
+                    signal_id=data['signal_id'],
+                    run_id=data['run_id']
+                )
+                signals.append(signal)
+            return signals
     
 
-    def get_open_positions(self):
+    def get_open_positions(self) -> list[OpenPosition]:
         """
         Retrieves all open positions for a given backtest run.
-        Args:
-            run_id (int): The ID of the backtest run.
         Returns:
             list: A list of OpenPosition objects associated with the run.
         """
 
-        self.cursor.execute("SELECT * FROM open_position WHERE run_id = ?", (self.current_run_id))
-        rows = self.cursor.fetchall()
-        positions = []
-        for row in rows:
-            data = dict(row)
-            position = OpenPosition(
-                stock=data['stock'],
-                direction=Direction(data['direction']),
-                date=pd.Timestamp(data['date']),
-                entry_price=data['entry_price'],
-                quantity_type=QuantityType(data['quantity_type']),
-                quantity=data['quantity'],
-                entry_signal_id=data['entry_signal_id'],
-                open_position_id=data['open_position_id'],
-                run_id=data['run_id']
-            )
-            positions.append(position)
-        return positions
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM open_position WHERE run_id = ?", (self.current_run_id,))
+            rows = cur.fetchall()
+            open_positions = []
+            for row in rows:
+                data = dict(row)
+                open_position = OpenPosition(
+                    stock=data['stock'],
+                    direction=Direction(data['direction']),
+                    date=pd.Timestamp(data['date']),
+                    entry_price=data['entry_price'],
+                    quantity_type=QuantityType(data['quantity_type']),
+                    quantity=data['quantity'],
+                    entry_signal_id=data['entry_signal_id'],
+                    open_position_id=data['open_position_id'],
+                    run_id=data['run_id']
+                )
+                open_positions.append(open_position)
+            return open_positions
     
 
-    def get_trades(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None):
+    def get_trades(self, start_date: pd.Timestamp | None = None, end_date: pd.Timestamp | None = None) -> list[Trade]:
         """
         Retrieves all trades for a given backtest run within the specified date range.
         If no date range is provided, all trades for the run will be returned.
         Args:
-            run_id (int): The ID of the backtest run.
+            start_date (pd.Timestamp | None): The start date of the range to retrieve trades for.
+            end_date (pd.Timestamp | None): The end date of the range to retrieve trades for.
         Returns:
             list: A list of Trade objects associated with the run.
         """
@@ -454,47 +481,52 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         query = "SELECT * FROM trade WHERE run_id = ?"
         params = [self.current_run_id]
 
-        if start_date:
+        if start_date and end_date:
+            query += " AND exit_date >= ? AND exit_date <= ?"
+            params.extend([start_date.to_pydatetime(), end_date.to_pydatetime()])
+        elif start_date:
             query += " AND exit_date >= ?"
-            params.append(start_date)
-
-        if end_date:
+            params.append(start_date.to_pydatetime())
+        elif end_date:
             query += " AND exit_date <= ?"
-            params.append(end_date)
+            params.append(end_date.to_pydatetime())
 
-        self.cursor.execute(query, tuple(params))
-        rows = self.cursor.fetchall()
-        trades = []
-        for row in rows:
-            data = dict(row)
-            trade = Trade(
-                stock=data['stock'],
-                direction=Direction(data['direction']),
-                quantity_type=QuantityType(data['quantity_type']),
-                quantity=data['quantity'],
-                entry_price=data['entry_price'],
-                exit_price=data['exit_price'],
-                entry_date=pd.Timestamp(data['entry_date']),
-                exit_date=pd.Timestamp(data['exit_date']),
-                gross_result=data['gross_result'],
-                commission=data['commission'],
-                net_result=data['net_result'],
-                entry_signal_id=data['entry_signal_id'],
-                exit_signal_id=data['exit_signal_id'],
-                trade_id=data['trade_id'],
-                run_id=data['run_id']
-            )
-            trades.append(trade)
-        return trades
-    
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(query, tuple(params))
+            rows = cur.fetchall()
+            trades = []
+            for row in rows:
+                data = dict(row)
+                trade = Trade(
+                    stock=data['stock'],
+                    direction=Direction(data['direction']),
+                    quantity_type=QuantityType(data['quantity_type']),
+                    quantity=data['quantity'],
+                    entry_price=data['entry_price'],
+                    exit_price=data['exit_price'],
+                    entry_date=pd.Timestamp(data['entry_date']),
+                    exit_date=pd.Timestamp(data['exit_date']),
+                    gross_result=data['gross_result'],
+                    commission=data['commission'],
+                    net_result=data['net_result'],
+                    entry_signal_id=data['entry_signal_id'],
+                    exit_signal_id=data['exit_signal_id'],
+                    trade_id=data['trade_id'],
+                    run_id=data['run_id']
+                )
+                trades.append(trade)
+            return trades
+        
 
-    def set_active_run(self, run_id: int):
+    def set_active_run(self, run_id: int) -> None:
         """
         Sets the internal context to a specific historical backtest run.
         Subsequent calls to retrieval methods (like get_signals) will fetch data for this run.
         Args:
             run_id (int): The ID of the backtest run to load.
         """
+
         self.current_run_id = run_id
 
         
