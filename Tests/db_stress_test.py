@@ -6,7 +6,7 @@ Description:
     It ensures database integrity, connection handling, and transaction rollbacks function correctly under heavy concurrent load.
 
 Author: Albert Marín Blasco
-Date Created: 2025-06-25
+Date Created: 2026-02-22
 Last Modified: 2026-02-22
 """
 
