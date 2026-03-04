@@ -44,11 +44,6 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
             self.conn.close()
 
 
-    def commit(self) -> None:
-        """Manual commit to allow batching during backtests."""
-        self.conn.commit()
-
-
     def _create_tables(self) -> None:
         """
         Initialize database tables if they do not exist.
@@ -147,7 +142,7 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
                     signal.reason,
                 ),
             )
-
+            self.conn.commit()
             signal.signal_id = cur.lastrowid
             return signal.signal_id
     
@@ -189,7 +184,7 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
                     open_position.entry_signal_id
                 ),
             )
-
+            self.conn.commit()
             open_position.open_position_id = cur.lastrowid
             return open_position.open_position_id
     

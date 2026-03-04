@@ -13,266 +13,252 @@ Last Modified: 2025-06-29
 
 
 import sqlite3
+import threading
+import pandas as pd
+
 from typing import List, Dict
 from datetime import datetime
 
 
 class MarketDatabase():
-    def __init__(self, db_path="database/market_db/market.db"):
-        self.db_path = db_path
-        self.conn = None
 
-    def connect(self):
-        self.conn = sqlite3.connect(self.db_path)
+    def __init__(self, db_path: str):
+        """
+        Initializes the MarketDatabase with a SQLite database connection.
+        If the database file does not exist, it will be created.
+        Args:
+            db_path (str): The file path for the SQLite database.
+        """
+
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
         self.conn.row_factory = sqlite3.Row
-        self.create_tables()
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        self.db_lock = threading.Lock()
+        self._create_tables()
 
 
-    #
-    # Table creation method
-    #
+    def close(self) -> None:
+        """Closes the database connection. Should be called when the database is no longer needed to free up resources."""
+        if self.conn:
+            self.conn.close()
 
-    def create_tables(self):
+
+    def _create_tables(self):
         """
         Creates the necessary tables in the SQLite database if they do not already exist.
-        This includes tables for OHLCV data, calendar, open trades, and closed trades.
+        This includes tables for OHLCV data, calendar, and tickers.
         """
 
-        cursor = self.conn.cursor()
+        schema = """
+        CREATE TABLE IF NOT EXISTS ohlcv (
+            symbol TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open REAL NOT NULL,
+            high REAL NOT NULL,
+            low REAL NOT NULL,
+            close REAL NOT NULL,
+            volume INTEGER NOT NULL,
+            PRIMARY KEY (symbol, date)
+        );
 
-        # OHLCV Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ohlcv (
-                symbol TEXT,
-                date TEXT,
-                open REAL,
-                high REAL,
-                low REAL,
-                close REAL,
-                volume INTEGER,
-                PRIMARY KEY (symbol, date)
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS calendar (
+            date TEXT PRIMARY KEY,
+            open BOOLEAN NOT NULL
+        );
 
-        # Calendar Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS calendar (
-                date TEXT PRIMARY KEY
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS dow_jones_tickers (
+            symbol TEXT PRIMARY KEY
+        );
 
-        # Open Trades Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS open_trades (
-                id TEXT PRIMARY KEY,
-                symbol TEXT,
-                entry_date TEXT,
-                entry_price REAL,
-                quantity INTEGER
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS SP500_tickers (
+            symbol TEXT PRIMARY KEY
+        );
+        """
 
-        # Closed Trades Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS closed_trades (
-                id TEXT PRIMARY KEY,
-                symbol TEXT,
-                entry_date TEXT,
-                entry_price REAL,
-                exit_date TEXT,
-                exit_price REAL,
-                quantity INTEGER,
-                profit REAL
-            )
-        """)
-        
-        # Tickers Tables
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS dow_jones_tickers (
-                symbol TEXT PRIMARY KEY
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS SP500_tickers (
-                symbol TEXT PRIMARY KEY
-            )
-        """)
-
-        self.conn.commit()
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executescript(schema)
+            self.conn.commit()
 
 
-    #
-    # OHLCV (Open, High, Low, Close, Volume) data methods
-    #
-
-    def insert_ohlcv_data(self, symbol: str, data: List[Dict]):
+    def insert_ohlcv_data(self, symbol: str, data: pd.DataFrame):
         """
         Inserts OHLCV data for a given symbol into the database.
         If the data already exists, it will be replaced.
         Parameters:
             symbol (str): The stock symbol for which the data is being inserted.
-            data (List[Dict]): A list of dictionaries containing OHLCV data.
+            data (pd.DataFrame): A pandas DataFrame containing OHLCV data for the symbol.
         """
-        cursor = self.conn.cursor()
-        for row in data:
-            cursor.execute("""
-                INSERT OR REPLACE INTO ohlcv (symbol, date, open, high, low, close, volume)
+        
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executemany(
+                """
+                INSERT OR REPLACE INTO ohlcv (
+                    symbol,
+                    date,
+                    open,
+                    high,
+                    low,
+                    close,
+                    volume
+                )
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                symbol,
-                row["date"],
-                row["open"],
-                row["high"],
-                row["low"],
-                row["close"],
-                row["volume"]
-            ))
-        self.conn.commit()
+                """,
+                [
+                    (
+                        symbol,
+                        index.to_pydatetime() if isinstance(index, pd.Timestamp) else index,
+                        row['open'],
+                        row['high'],
+                        row['low'],
+                        row['close'],
+                        row['volume']
+                    )
+                    for index, row in data.iterrows()
+                ]
+            )
+            self.conn.commit()
 
-    def get_ohlcv_data(self, symbol: str, start_date: datetime, end_date: datetime) -> List[Dict]:
+
+    def get_ohlcv_data(self, symbol: str, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         """
         Retrieves OHLCV data for a given symbol within a specified date range.
+        The returned DataFrame will have a DatetimeIndex.
         Parameters:
             symbol (str): The stock symbol for which the data is being retrieved.
-            start_date (datetime): The start date of the range.
-            end_date (datetime): The end date of the range.
+            start_date (pd.Timestamp): The start date of the range.
+            end_date (pd.Timestamp): The end date of the range.
         Returns:
-            List[Dict]: A list of dictionaries containing OHLCV data for the specified symbol and date range.
+            pd.DataFrame: A DataFrame containing the OHLCV data for the specified symbol and date range, indexed by date.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT * FROM ohlcv
-            WHERE symbol = ? AND date BETWEEN ? AND ?
-            ORDER BY date ASC
-        """, (
-            symbol,
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        ))
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                SELECT *
+                FROM ohlcv
+                WHERE symbol = ? AND date BETWEEN ? AND ?
+                ORDER BY date ASC
+                """,
+                (
+                    symbol,
+                    start_date.to_pydatetime(),
+                    end_date.to_pydatetime()
+                )
+            )
+            rows = cur.fetchall()
+            columns = [description[0] for description in cur.description]
+
+            df = pd.DataFrame(rows, columns=columns)            
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
+            
+            return df
+
     
-    def has_ohlcv_data(self, symbol: str, start_date: datetime, end_date: datetime) -> bool:
+    def has_ohlcv_data(self, symbol: str, start_date: pd.Timestamp, end_date: pd.Timestamp) -> bool:
         """
         Checks if OHLCV data exists for a given symbol within a specified date range.
+        It compares the number of OHLCV records with the number of trading days in the calendar.
         Parameters:
             symbol (str): The stock symbol for which the data is being checked.
-            start_date (datetime): The start date of the range.
-            end_date (datetime): The end date of the range.
+            start_date (pd.Timestamp): The start date of the range.
+            end_date (pd.Timestamp): The end date of the range.
         Returns:
             bool: True if OHLCV data exists for the specified symbol and date range, False otherwise.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT date FROM calendar
-            WHERE date BETWEEN ? AND ?
-        """, (
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        ))
-        trading_days = [row[0] for row in cursor.fetchall()]
 
-        if not trading_days:
-            raise ValueError("No trading days found in start {start_date} and end {end_date} range.")
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM ohlcv
+                WHERE symbol = ? AND date BETWEEN ? AND ?
+                """,
+                (
+                    symbol,
+                    start_date.to_pydatetime(),
+                    end_date.to_pydatetime()
+                )
+            )
+            count = cur.fetchone()[0]
 
-        cursor.execute("""
-            SELECT COUNT(*) FROM ohlcv
-            WHERE symbol = ? AND date BETWEEN ? AND ?
-        """, (
-            symbol,
-            start_date.strftime('%Y-%m-%d'),
-            end_date.strftime('%Y-%m-%d')
-        ))
-        data_count = cursor.fetchone()[0]
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM calendar
+                WHERE date BETWEEN ? AND ? AND open = 1
+                """,
+                (
+                    start_date.to_pydatetime(),
+                    end_date.to_pydatetime()
+                )
+            )
+            trading_days = cur.fetchone()[0]
 
-        return data_count == len(trading_days)
+            return count == trading_days
 
 
-    #
-    # Backtesting trade methods
-    #
-
-    def insert_open_trade_backtest(self, position: Dict):
+    def get_dow_jones_tickers(self) -> pd.DataFrame:
         """
-        Inserts an open trade record into the database for backtesting purposes.
-        Parameters:
-            position (Dict): A dictionary containing the details of the open trade.
-                Expected keys: 'id', 'symbol', 'entry_date', 'entry_price', 'quantity'.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO open_trades (id, symbol, entry_date, entry_price, quantity)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            position["id"],
-            position["symbol"],
-            position["entry_date"].strftime('%Y-%m-%d'),
-            position["entry_price"],
-            position["quantity"]
-        ))
-        self.conn.commit()
-
-    def insert_close_trade_backtest(self, trade: Dict):
-        """
-        Inserts a closed trade record into the database for backtesting purposes.
-        Parameters:
-            trade (Dict): A dictionary containing the details of the closed trade.
-                Expected keys: 'id', 'symbol', 'entry_date', 'entry_price', 'exit_date', 'exit_price', 'quantity', 'profit'.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO closed_trades (id, symbol, entry_date, entry_price, exit_date, exit_price, quantity, profit)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            trade["id"],
-            trade["symbol"],
-            trade["entry_date"].strftime('%Y-%m-%d'),
-            trade["entry_price"],
-            trade["exit_date"].strftime('%Y-%m-%d'),
-            trade["exit_price"],
-            trade["quantity"],
-            trade["profit"]
-        ))
-        self.conn.commit()
-
-    def get_open_trades_backtest(self) -> List[Dict]:
-        """
-        Retrieves all open trades from the database for backtesting purposes.
+        Retrieves all Dow Jones tickers from the database.
         Returns:
-            List[Dict]: A list of dictionaries containing open trade records.
+            pd.DataFrame: A DataFrame containing the stock symbols in the Dow Jones index.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM open_trades")
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        with self.db_lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT symbol FROM dow_jones_tickers")
+            rows = cursor.fetchall()
+            return pd.DataFrame(rows, columns=['symbol'])
     
-    def get_closed_trades_backtest(self) -> List[Dict]:
+    
+    def get_sp500_tickers(self) -> pd.DataFrame:
         """
-        Retrieves all closed trades from the database for backtesting purposes.
+        Retrieves all S&P 500 tickers from the database.
         Returns:
-            List[Dict]: A list of dictionaries containing closed trade records.
+            pd.DataFrame: A DataFrame containing the stock symbols in the S&P 500 index.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM closed_trades")
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        with self.db_lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT symbol FROM SP500_tickers")
+            rows = cursor.fetchall()
+            return pd.DataFrame(rows, columns=['symbol'])
+
+
     
-    def delete_open_trade_backtest(self, trade_id: str):
+    def _insert_stock_calendar(self, calendar_data: pd.DataFrame):
         """
-        Deletes an open trade from the backtesting table by its ID.
+        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
+        Populates the calendar table with dates available on the Alpaca API.
+        -- Calendar data is already populated form 1970 to 2029 --
         Parameters:
-            trade_id (str): The ID of the trade to delete.
+            calendar_data (pd.DataFrame): DataFrame of Alpaca Calendar objects.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM open_trades WHERE id = ?", (trade_id,))
-        self.conn.commit()
-    
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executemany("""
+                INSERT OR IGNORE INTO calendar (
+                    date,
+                    open
+                )
+                VALUES (?, ?)
+                """,
+                [
+                    (
+                        index.to_pydatetime() if isinstance(index, pd.Timestamp) else index,
+                        1 if row['open'] else 0
+                    )
+                    for index, row in calendar_data.iterrows()
+                ]
+            )
+            self.conn.commit()
 
-    #
-    # Tickers methods
-    #
 
-    def insert_dow_jones_tickers(self, tickers: List[str]):
+    def _insert_dow_jones_tickers(self, tickers: List[str]):
         """
         TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
         Inserts a list of tickers into the database.
@@ -280,25 +266,16 @@ class MarketDatabase():
         Parameters:
             tickers (List[str]): A list of stock symbols to insert into the database.
         """
-        cursor = self.conn.cursor()
-        cursor.executemany("""
-            INSERT OR IGNORE INTO dow_jones_tickers (symbol)
-            VALUES (?)
-        """, [(ticker,) for ticker in tickers])
-        self.conn.commit()
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executemany("""
+                INSERT OR IGNORE INTO dow_jones_tickers (symbol)
+                VALUES (?)
+            """, [(ticker,) for ticker in tickers])
+            self.conn.commit()
 
-    def get_dow_jones_tickers(self) -> List[str]:
-        """
-        Retrieves all Dow Jones tickers from the database.
-        Returns:
-            List[str]: A list of stock symbols in the Dow Jones index.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT symbol FROM dow_jones_tickers")
-        rows = cursor.fetchall()
-        return [row[0] for row in rows]
-    
-    def insert_sp500_tickers(self, tickers: List[str]):
+
+    def _insert_sp500_tickers(self, tickers: List[str]):
         """
         TICKERS ARE ALREADY POPULATED, DO NOT USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
         Inserts a list of S&P 500 tickers into the database.
@@ -306,63 +283,10 @@ class MarketDatabase():
         Parameters:
             tickers (List[str]): A list of stock symbols to insert into the database.
         """
-        cursor = self.conn.cursor()
-        cursor.executemany("""
-            INSERT OR IGNORE INTO SP500_tickers (symbol)
-            VALUES (?)
-        """, [(ticker,) for ticker in tickers])
-        self.conn.commit()
-    
-    def get_sp500_tickers(self) -> List[str]:
-        """
-        Retrieves all S&P 500 tickers from the database.
-        Returns:
-            List[str]: A list of stock symbols in the S&P 500 index.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT symbol FROM SP500_tickers")
-        rows = cursor.fetchall()
-        return [row[0] for row in rows]
-
-
-    #
-    # Other methods, THIS SHOULD NOT BE USED UNLESS YOU KNOW WHAT YOU ARE DOING
-    #
-    
-    def populate_stock_calendar(self, calendar_data: List):
-        """
-        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Populates the calendar table with dates available on the Alpaca API.
-        -- Calendar data is already populated form 1970 to 2029 --
-        Parameters:
-            calendar_data (List): List of Alpaca Calendar objects.
-        """
-        cursor = self.conn.cursor()
-        cursor.executemany("""
-            INSERT OR IGNORE INTO calendar (date)
-            VALUES (?)
-        """, [(item.date.strftime('%Y-%m-%d'),) for item in calendar_data])
-        self.conn.commit()
-
-    def clear_database(self):
-        """
-        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Clears the database by dropping all tables.
-        WARNING: This will delete all data in the database.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("DROP TABLE IF EXISTS ohlcv")
-        cursor.execute("DROP TABLE IF EXISTS calendar")
-        cursor.execute("DROP TABLE IF EXISTS open_trades")
-        cursor.execute("DROP TABLE IF EXISTS closed_trades")
-        self.conn.commit()
-    
-    def clear_backtest_tables(self):
-        """
-        DON'T USE THIS METHOD UNLESS YOU KNOW WHAT YOU ARE DOING.
-        Clears all data from the backtesting tables.
-        """
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM open_trades")
-        cursor.execute("DELETE FROM closed_trades")
-        self.conn.commit()
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.executemany("""
+                INSERT OR IGNORE INTO SP500_tickers (symbol)
+                VALUES (?)
+            """, [(ticker,) for ticker in tickers])
+            self.conn.commit()

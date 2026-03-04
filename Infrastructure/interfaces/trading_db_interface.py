@@ -31,13 +31,6 @@ class TradingDataBaseInterface(ABC):
         Handles exception arguments passed by Python's context manager.
         """
         self.close()
-
-    @abstractmethod
-    def commit(self):
-        """
-        Commits the current transaction to the database.
-        """
-        pass
     
     @abstractmethod
     def close(self):

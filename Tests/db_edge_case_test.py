@@ -39,7 +39,6 @@ def test_persistence_and_reconnection(db_class, db_path: str, is_backtest: bool)
         )
     
     sig_id = db_manager.insert_signal(get_dummy_signal(pd.Timestamp.now(tz='UTC')))
-    db_manager.commit()
     db_manager.close()
     
     db_manager_reconnected = db_class(db_path)
@@ -80,7 +79,6 @@ def test_date_filtering(db_manager: TradingDataBaseInterface, is_backtest: bool)
         with db_manager.db_lock:
             cur = db_manager.conn.cursor()
             db_manager._insert_trade(trade, cur)
-            db_manager.commit()
             
     start_bound = pd.Timestamp("2026-01-14 00:00:00", tz='UTC')
     end_bound = pd.Timestamp("2026-01-16 00:00:00", tz='UTC')
@@ -103,12 +101,10 @@ def test_cascading_deletes(db_manager: TradingDataBaseInterface, is_backtest: bo
         )
         
         sig_id = db_manager.insert_signal(get_dummy_signal(pd.Timestamp.now(tz='UTC')))
-        db_manager.commit()
         
         with db_manager.db_lock:
             cur = db_manager.conn.cursor()
             cur.execute("DELETE FROM backtest_run WHERE run_id = ?", (run_id,))
-            db_manager.commit()
             
         signals = db_manager.get_signals()
         assert len(signals) == 0, "Cascading delete failed: Signals remained after backtest_run was deleted."
@@ -122,12 +118,10 @@ def test_cascading_deletes(db_manager: TradingDataBaseInterface, is_backtest: bo
             entry_price=150, quantity_type=QuantityType.SHARES, quantity=10, entry_signal_id=sig_id
         )
         db_manager.insert_open_position(pos)
-        db_manager.commit()
         
         with db_manager.db_lock:
             cur = db_manager.conn.cursor()
             cur.execute("DELETE FROM signal WHERE signal_id = ?", (sig_id,))
-            db_manager.commit()
             
         positions = db_manager.get_open_positions()
         assert not any(p.entry_signal_id == sig_id for p in positions), "Cascading delete failed: Position remained after signal deleted."
@@ -151,7 +145,6 @@ def test_read_while_write_concurrency(db_manager: TradingDataBaseInterface, is_b
             for _ in range(500):
                 if stop_event.is_set(): break
                 db_manager.insert_signal(get_dummy_signal(pd.Timestamp.now(tz='UTC')))
-                db_manager.commit()
         except Exception as e:
             error_caught.append(e)
 

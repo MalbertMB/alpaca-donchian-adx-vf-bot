@@ -82,13 +82,10 @@ def simulate_bot_worker(db_manager: TradingDataBaseInterface, bot_id: int, num_c
             db_manager.close_open_position(pos_id, trade)
             success_count += 1
             
-            if i % 100 == 0:
-                db_manager.commit()
                 
         except Exception as e:
             print(f"ERROR: Worker {bot_id} encountered an exception: {e}")
 
-    db_manager.commit()
     return success_count
 
 def test_edge_cases(db_manager: TradingDataBaseInterface):

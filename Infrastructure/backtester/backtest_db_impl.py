@@ -47,11 +47,6 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
             self.conn.close()
 
 
-    def commit(self) -> None:
-        """Manual commit to allow batching during backtests."""
-        self.conn.commit()
-
-
     def _create_tables(self) -> None:
         """
         Creates the necessary schema if it doesn't exist.
@@ -170,7 +165,6 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
                 ),
             )
             self.conn.commit()
-
             self.current_run_id = cur.lastrowid
             return self.current_run_id
     
@@ -197,7 +191,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
     def insert_signal(self, signal: Signal) -> int:
         """
         Inserts a new signal into the database and assigns its ID.
-        This method does not commit changes, the caller must handle committing.
+        
         Args:
             signal (Signal): The Signal object to insert.
         Returns:
@@ -233,7 +227,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
                     signal.reason,
                 ),
             )
-
+            self.conn.commit()
             signal.signal_id = cur.lastrowid
             return signal.signal_id
 
@@ -241,7 +235,6 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
     def insert_open_position(self, open_position: OpenPosition) -> int:
         """
         Inserts a new open position into the database and assigns its ID.
-        This method does not commit changes, the caller must handle committing.
         Args:
             open_position (OpenPosition): The OpenPosition object to insert.
         Returns:
@@ -278,7 +271,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
                     open_position.entry_signal_id,
                 ),
             )
-            
+            self.conn.commit()
             open_position.open_position_id = cur.lastrowid
             return open_position.open_position_id
 
@@ -287,7 +280,7 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
         """
         Inserts a new trade into the database and assigns its ID.
         This method is intended for internal use when closing positions, as it does not handle deleting the open position or committing the transaction.
-        This method does not commit changes, the caller must handle committing.
+        
         Args:
             trade (Trade): The Trade object to insert.
         Returns:
@@ -343,7 +336,6 @@ class BacktestDataBaseManager(TradingDataBaseInterface):
     def close_open_position(self, open_position_id: int, trade: Trade) -> int:
         """
         Closes an open position by inserting a corresponding trade and deleting the open position.
-        This method handles the entire transaction, including committing changes.
         If the open_position_id does not exist, it will roll back to maintain data integrity.
         Args:
             open_position_id (int): The ID of the open position to close.

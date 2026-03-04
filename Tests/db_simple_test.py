@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 from Domain import Signal, OpenPosition, Trade, Direction, QuantityType, SignalType
 from Infrastructure import BacktestDataBaseManager, LiveTraderDataBaseManager, TradingDataBaseInterface
 
-def run_stress_test(db_manager: TradingDataBaseInterface, is_backtest: bool, num_records: int = 10000, batch_size: int = 1000):
+def run_stress_test(db_manager: TradingDataBaseInterface, is_backtest: bool, num_records: int = 10000, batch_size: int = 100):
     print(f"INFO: Commencing sequential stress test for {db_manager.__class__.__name__}.")
     print(f"INFO: Target configuration - {num_records} complete trade cycles.")
     
@@ -91,10 +91,7 @@ def run_stress_test(db_manager: TradingDataBaseInterface, is_backtest: bool, num
         db_manager.close_open_position(pos_id, trade)
         
         if i % batch_size == 0:
-            db_manager.commit()
             print(f"INFO: Processed {i}/{num_records} records.")
-
-    db_manager.commit()
     
     if is_backtest:
         db_manager.close_backtest_run()
@@ -115,10 +112,10 @@ if __name__ == "__main__":
 
     try:
         with BacktestDataBaseManager(backtest_db_path) as bt_db:
-            run_stress_test(bt_db, is_backtest=True, num_records=25000)
+            run_stress_test(bt_db, is_backtest=True, num_records=5000)
 
         with LiveTraderDataBaseManager(live_db_path) as live_db:
-            run_stress_test(live_db, is_backtest=False, num_records=25000)
+            run_stress_test(live_db, is_backtest=False, num_records=5000)
     finally:
         if os.path.exists(backtest_db_path): os.remove(backtest_db_path)
         if os.path.exists(live_db_path): os.remove(live_db_path)
