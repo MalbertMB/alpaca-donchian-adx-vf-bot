@@ -38,6 +38,14 @@ class MarketDatabase():
         self._create_tables()
 
 
+    def __enter__(self):
+        """Allows the database to be used as a context manager with the 'with' statement."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Ensures the database connection is closed when exiting a 'with' block."""
+        self.close()
+
     def close(self) -> None:
         """Closes the database connection. Should be called when the database is no longer needed to free up resources."""
         if self.conn:
@@ -74,6 +82,9 @@ class MarketDatabase():
         CREATE TABLE IF NOT EXISTS SP500_tickers (
             symbol TEXT PRIMARY KEY
         );
+
+        CREATE INDEX IF NOT EXISTS idx_ohlcv_symbol_date ON ohlcv(symbol, date);
+        CREATE INDEX IF NOT EXISTS idx_calendar_date_open ON calendar(date, open);
         """
 
         with self.db_lock:
@@ -90,7 +101,10 @@ class MarketDatabase():
             symbol (str): The stock symbol for which the data is being inserted.
             data (pd.DataFrame): A pandas DataFrame containing OHLCV data for the symbol.
         """
-        
+
+        if data.empty:
+            return
+
         with self.db_lock:
             cur = self.conn.cursor()
             cur.executemany(
@@ -138,7 +152,7 @@ class MarketDatabase():
             cur = self.conn.cursor()
             cur.execute(
                 """
-                SELECT *
+                SELECT date, open, high, low, close, volume
                 FROM ohlcv
                 WHERE symbol = ? AND date BETWEEN ? AND ?
                 ORDER BY date ASC
@@ -200,7 +214,19 @@ class MarketDatabase():
             )
             trading_days = cur.fetchone()[0]
 
-            return count == trading_days
+            return count > 0 and count == trading_days
+
+
+    def delete_ohlcv_data(self, symbol: str) -> None:
+        """
+        Deletes all OHLCV data for a given symbol from the database.
+        Parameters:
+            symbol (str): The stock symbol whose data should be deleted.
+        """
+        with self.db_lock:
+            cur = self.conn.cursor()
+            cur.execute("DELETE FROM ohlcv WHERE symbol = ?", (symbol,))
+            self.conn.commit()
 
 
     def get_dow_jones_tickers(self) -> pd.DataFrame:

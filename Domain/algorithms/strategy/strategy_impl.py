@@ -19,7 +19,7 @@ from ...objects import Signal, SignalType
 class VolatilityBreakoutStrategy(Strategy):
     def __init__(self, 
                  donchian_period: int = 20, 
-                 adx_threshold: float = 25.0, 
+                 adx_threshold: float = 25.0,
                  atr_period: int = 14, 
                  volatility_ratio_threshold: float = 0.01,
                  trailing_exit_period: int = 10):
