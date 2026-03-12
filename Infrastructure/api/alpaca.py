@@ -391,6 +391,39 @@ class AlpacaAPI:
             raise AlpacaOrderError(
                 f"Limit order failed ({side.value} {qty} {symbol} @ {limit_price}): {exc}"
             ) from exc
+        
+    def close_market_order(self, symbol: str) -> Order:
+        """
+        Closes the entire open position for a given symbol at market price.
+
+        Args:
+            symbol (str): Ticker of the position to close.
+        Returns:
+            Order: The resulting closing order.
+        Raises:
+            AlpacaOrderError: If the closure fails (e.g. no open position).
+        """
+        try:
+            return self._trading.close_position(symbol)
+        except APIError as exc:
+            raise AlpacaOrderError(
+                f"Failed to close position for {symbol}: {exc}"
+            ) from exc
+        
+
+    def get_open_orders(self) -> list[Order]:
+        """
+        Retrieves all currently open orders in the account.
+
+        Returns:
+            list[Order]: List of alpaca-py Order objects.
+        Raises:
+            AlpacaAPIError: If the request fails.
+        """
+        try:
+            return self._trading.get_all_orders(status="open")
+        except APIError as exc:
+            raise AlpacaAPIError(f"Failed to retrieve open orders: {exc}") from exc
 
 
     def cancel_all_orders(self) -> None:

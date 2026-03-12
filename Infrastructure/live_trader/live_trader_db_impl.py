@@ -38,6 +38,14 @@ class LiveTraderDataBaseManager(TradingDataBaseInterface):
         self._create_tables()
 
 
+    def __enter__(self):
+        """Allows the database to be used as a context manager with the 'with' statement."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Ensures the database connection is closed when exiting a 'with' block."""
+        self.close()
+
     def close(self) -> None:
         """Closes the database connection. Should be called when the database is no longer needed to free up resources."""
         if self.conn:
