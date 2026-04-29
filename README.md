@@ -1,36 +1,37 @@
-# Alpaca Donchian-ADX-VF Trading Bot
+# TFT-GNN Evolutionary Graph Trading System
 
-A professional-grade real-time trading bot and backtesting engine. This project implements a quantitative strategy leveraging Donchian Channels, Average Directional Index (ADX), and a Volatility Factor (VF) to navigate market trends with precision.
+A professional-grade autonomous trading system and predictive AI engine developed for a Bachelor's Thesis (TFG). This project implements a cutting-edge quantitative strategy that leverages a hybrid Temporal Fusion Transformer (TFT) and Graph Neural Network (GNN) architecture to model dynamic market relationships and execute trades in real-time.
 
 ## Project Architecture
 
-The system follows a Clean Architecture pattern to ensure maintainability and testability by decoupling business logic from external dependencies.
+The system follows a Clean Architecture pattern to ensure maintainability, testability, and a clear separation between the deep learning models and the market execution logic.
 
-* Application: Orchestrates execution logic for live trading and backtesting environments.
-* Domain: The core of the project. Includes the trading strategy, mathematical indicators, and business objects independent of external libraries.
-* Infrastructure: Handles the details including database implementations, API clients (Alpaca), and data persistence.
+* **Application**: Orchestrates execution logic for live trading, data pipelines, and Monte Carlo stochastic evaluation.
+* **Domain**: The core of the project. Includes the neural network architectures (TFT, GNN), feature engineering logic, and mathematical business objects independent of external libraries.
+* **Infrastructure**: Handles external dependencies, including database implementations, the Alpaca API client, and high-fidelity data persistence.
 
 ---
 
 ## Repository Structure
 
 ```text
-ALPACA-DONCHIAN-ADX-VF-BOT
+TFT-GNN-TRADING-SYSTEM
 ├── Application/
-│   ├── backtest/             # Backtesting execution logic
+│   ├── evaluation/           # Monte Carlo simulation pipelines
 │   ├── config/               # Configuration and environment management
-│   ├── interfaces/           # High-level trader interfaces
-│   └── live_trading/         # Real-time execution logic
+│   ├── interfaces/           # High-level trader and predictor interfaces
+│   └── live_trading/         # Real-time execution and paper trading logic
 ├── Domain/
-│   ├── algorithms/
-│   │   └── strategy/         # Strategy implementation (Donchian + ADX + VF)
-│   ├── objects/              # Data objects (Signals, Positions)
-│   └── utils/                # Helpers, Indicators, and Performance Metrics
+│   ├── models/
+│   │   ├── gnn/              # Dynamic Adjacency Matrix and Graph Networks
+│   │   └── tft/              # Temporal Fusion Transformer implementation
+│   ├── features/             # Feature engineering (e.g., Fractional Differentiation)
+│   └── objects/              # Data objects (Tensors, Signals, Positions)
 ├── Infrastructure/
-│   ├── backtester/           # Database implementations for backtest results
+│   ├── backtester/           # Database implementations for historical results
 │   ├── interfaces/           # DB and API abstract interfaces
 │   ├── live_trader/          # Live database persistence
-│   └── market/               # Market data management and storage
+│   └── market/               # Alpaca Market data management and storage
 ├── main.py                   # Entry point for the application
 ├── .env                      # API Keys and Secrets (Local only)
 └── requirements.txt          # Project dependencies
@@ -43,72 +44,72 @@ ALPACA-DONCHIAN-ADX-VF-BOT
 ### Prerequisites
 * Python 3.10 or higher
 * Alpaca Markets account (Paper or Live)
+* CUDA-compatible GPU (highly recommended for deep learning model training)
 
 ### Installation
 1. Clone the repository:
-```text
-   git clone https://github.com/MalbertMB/alpaca-donchian-adx-vf-bot.git
-   cd alpaca-donchian-adx-vf-bot
+```bash
+git clone https://github.com/MalbertMB/tft-gnn-trading-system.git
+cd tft-gnn-trading-system
 ```
 
 2. Set up a virtual environment:
-```text
-   python -m venv .venv
-   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+```bash
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 ```
 
 3. Install dependencies:
-```text
-   pip install -r requirements.txt
+```bash
+pip install -r requirements.txt
 ```
 
 4. Configure Environment Variables:
-   Create a .env file in the root directory:
-```text
-   ALPACA_API_KEY=your_key_here
-   ALPACA_SECRET_KEY=your_secret_here
-   BASE_URL=https://paper-api.alpaca.markets
+Create a `.env` file in the root directory:
+```env
+ALPACA_API_KEY=your_key_here
+ALPACA_SECRET_KEY=your_secret_here
+BASE_URL=https://paper-api.alpaca.markets
 ```
+
 ---
 
-## Strategy Overview
+## Model & Strategy Overview
 
-The system implements a trend-following logic that filters breakouts based on trend strength and local volatility.
+The system treats the financial market as an interconnected ecosystem, aiming to overcome the low signal-to-noise ratio inherent in short-term trading.
 
-### Core Components
+### Core AI Engine
 
-* **Donchian Channels**: These establish the trading range. A breakout above the upper channel (n-period high) generates a potential long signal, while a drop below the lower channel (n-period low) generates a potential exit or short signal.
-* **Average Directional Index (ADX)**: Serves as the primary trend filter. The bot only considers entries when the ADX is above a specific threshold (typically 25), indicating that the market is in a trending phase rather than a range-bound phase.
-* **Volatility Factor (VF)**: Used to normalize entry sensitivity. It compares the current market volatility (Standard Deviation) against a long-term Average True Range (ATR) to adjust position sizing or stop-loss distances dynamically.
+* **Spatial Engine (Dynamic GNN)**: Utilizes a Dynamic Adjacency Matrix that recalculates edge weights at each time step using rolling Pearson correlation or Mutual Information metrics. This enables the model to rapidly adapt to sudden changes in market correlations.
+* **Temporal Engine (TFT)**: Integrates spatial features into a Temporal Fusion Transformer to achieve robust multi-horizon forecasting.
+* **Feature Engineering**: Applies Fractional Differentiation to time series data, ensuring the data remains stationary while preserving crucial historical memory.
 
-### Entry Logic
+### Execution & Integration
 
-A Long position is initiated when:
-1. The closing price exceeds the Upper Donchian Channel.
-2. The ADX is greater than the trend threshold.
-3. The Volatility Factor confirms that the current breakout is not an outlier driven by extreme, unsustainable noise.
+* **Alpaca API**: The infrastructure is powered by the Alpaca API to fetch high-fidelity historical and real-time OHLC data.
+* **Paper Trading Pipeline**: Executes trades with simulated capital under real market conditions to validate latency, slippage, and model synchronization before live deployment.
 
-### Exit Logic
+### Risk Management & Evaluation
 
-Positions are closed when:
-1. The price crosses the mid-point or the opposite Donchian Channel.
-2. The ADX falls below the threshold, suggesting the trend has exhausted.
-3. A volatility-adjusted trailing stop is triggered.
+Moving beyond standard historical backtesting, the system relies on stochastic validation:
+
+* **Monte Carlo Simulations**: By collecting paper trading or backtesting operations, the system generates thousands of yield curve permutations.
+* **Metrics**: This analysis determines the mathematical expectation of the system across different scenarios, rigorously calculating maximum drawdown risk and the probability of ruin.
 
 ---
 
 ## Tech Stack
-* Execution: alpaca-py (v0.43.2)
-* Data Analysis: pandas (v3.0.0), numpy (v2.3.5), numba (v0.63.1)
-* Technical Analysis: ta (v0.11.0), vectorbt (v0.28.2)
-* Database: SQLite (managed via Infrastructure layer)
-* Validation: pydantic (v2.12.5)
-* Visualization: matplotlib (v3.10.8), plotly (v6.5.2)
+* **Deep Learning**: PyTorch, PyTorch Geometric, PyTorch Forecasting
+* **Execution**: alpaca-py
+* **Data Science**: pandas, numpy, networkx (for graph generation)
+* **Database**: SQLite (managed via Infrastructure layer)
+* **Validation**: pydantic
+* **Visualization**: matplotlib, plotly (for Monte Carlo distribution charts)
 
 ---
 
 ## Disclaimer
-Trading involves significant risk. This software is for educational purposes only. Always test in a paper trading environment before using real capital.
+Trading involves significant risk. This software is for educational purposes only and is developed as part of academic research. Always test thoroughly in a paper trading environment before risking real capital.
 
 ---
 
